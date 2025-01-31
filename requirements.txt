@@ -1,0 +1,5 @@
+gtsam
+jax
+matplotlib
+numpy
+scipy
