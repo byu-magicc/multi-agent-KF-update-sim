@@ -7,12 +7,19 @@ def line_trajectory(n_points, start_location, end_location):
 
     Parameters:
     n_points (int): The number of points to generate.
-    start_location (np.array): The starting location of the line. [x, y]
-    end_location (np.array): The ending location of the line. [x, y]
+    start_location (np.array): The starting location of the line. [[x, y]].T
+    end_location (np.array): The ending location of the line. [[x, y]].T
 
     Returns:
     np.array: The position and heading of the robot along a line trajectory. [[x1, y1, psi1].T, ... ].T
     """
+    assert n_points > 1
+    assert start_location.shape == (2, 1)
+    assert end_location.shape == (2, 1)
+
+    start_location = start_location.flatten()
+    end_location = end_location.flatten()
+
     position = np.array([start_location + i * (end_location - start_location) / (n_points - 1)
                          for i in range(n_points)])
     heading = np.arctan2(end_location[1] - start_location[1],
@@ -26,14 +33,20 @@ def arc_trajectory(n_points, start_location, end_location, angle):
 
     Parameters:
     n_points (int): The number of points to generate.
-    start_location (np.array): The starting location of the arc. [x, y]
-    end_location (np.array): The ending location of the arc. [x, y]
+    start_location (np.array): The starting location of the arc. [[x, y]].T
+    end_location (np.array): The ending location of the arc. [[x, y]].T
     angle (float): The angle of the arc in degrees at the starting point, measured from the 
         line between the start and end points.
 
     Returns:
     np.array: The position and heading of the robot along an arc trajectory. [[x1, y1, psi1].T, ... ].T
     """
+    assert n_points > 1
+    assert start_location.shape == (2, 1)
+    assert end_location.shape == (2, 1)
+
+    start_location = start_location.flatten()
+    end_location = end_location.flatten()
     angle = np.deg2rad(angle)
 
     # If the angle is 0, generate a line trajectory to avoid numerical instability
@@ -73,8 +86,8 @@ def sine_trajectory(n_points, start_location, end_location, amplitude, n_periods
 
     Parameters:
     n_points (int): The number of points to generate.
-    start_location (np.array): The starting location of the sine wave. [x, y]
-    end_location (np.array): The ending location of the sine wave. [x, y]
+    start_location (np.array): The starting location of the sine wave. [[x, y]].T
+    end_location (np.array): The ending location of the sine wave. [[x, y]].T
     amplitude (float): The amplitude of the sine wave.
     n_periods (int): The number of periods in the sine wave. Recommended to be an integer,
         or an integer plus 0.5.
@@ -82,6 +95,13 @@ def sine_trajectory(n_points, start_location, end_location, amplitude, n_periods
     Returns:
     np.array: The position and heading of the robot along a sine trajectory. [[x1, y1, psi1].T, ... ].T
     """
+    assert n_points > 1
+    assert start_location.shape == (2, 1)
+    assert end_location.shape == (2, 1)
+    assert n_periods > 0
+
+    start_location = start_location.flatten()
+    end_location = end_location.flatten()
 
     # Generate the sine wave
     length = np.linalg.norm(end_location - start_location)
