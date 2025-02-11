@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
 
-def plot_xy_trajectories(poses=[], covariances=[], markers=[], lines=[]):
+def plot_overview(poses=[], covariances=[], markers=[], lines=[]):
     """
     Plots the top-down view of various agent trajectories, covariance elipses, global measurement
     markers, and range markers.
@@ -44,8 +44,11 @@ def plot_xy_trajectories(poses=[], covariances=[], markers=[], lines=[]):
 
     # Plot covariance ellipses
     for covariance in covariances:
+        assert covariance[0].shape == (2, 2)
+        assert covariance[1].shape == (2, 1)
+
         cov = covariance[0]
-        mean = covariance[1]
+        mean = covariance[1].flatten()
         eigvals, eigvecs = np.linalg.eig(cov)
         angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
         ell = Ellipse(xy=(mean[0], mean[1]),
@@ -97,5 +100,5 @@ if __name__ == "__main__":
         [np.array([[12, -7], [-7, 6]]), np.array([[50], [20]]), "k"]
     ]
 
-    plot_xy_trajectories(poses=poses, lines=lines, markers=markers, covariances=covariances)
+    plot_overview(poses=poses, lines=lines, markers=markers, covariances=covariances)
 

@@ -56,7 +56,7 @@ def get_imu_data(trajectory, noise_std, dt):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    from plotters import plot_xy_trajectories
+    from plotters import plot_overview
     from trajectories import line_trajectory, arc_trajectory, sine_trajectory
 
     time = 60
@@ -87,7 +87,7 @@ if __name__ == "__main__":
 
     x_traj = np.hstack(x_traj)
 
-    plot_xy_trajectories([[trajectory[:2], "Truth", "r"], [x_traj[:2], "Estimate", "b"]])
+    plot_overview([[trajectory[:2], "Truth", "r"], [x_traj[:2], "Estimate", "b"]])
 
     error = x_traj[:2] - trajectory[:2]
     error_psi = x_traj[2] - trajectory[2]
