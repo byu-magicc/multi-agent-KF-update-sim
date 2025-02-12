@@ -67,7 +67,21 @@ def _h_global(mu_t):
 
 
 class EKF:
+    """
+    Basic EKF class for IMU propagation and global measurements.
+    """
     def __init__(self, mu_0, Sigma_0, Sigma_global, Sigma_imu):
+        """
+        Parameters:
+        mu_0: np.array, shape (5, 1)
+            Initial state estimate. Contains the position, orientation, and velocity.
+        Sigma_0: np.array, shape (5, 5)
+            Initial covariance matrix.
+        Sigma_global: np.array, shape (2, 2)
+            Covariance matrix for the global measurement uncertainty.
+        Sigma_imu: np.array, shape (3, 3)
+            Covariance matrix for the IMU measurement uncertainty.
+        """
         assert mu_0.shape == (5, 1)
         assert Sigma_0.shape == (5, 5)
         assert Sigma_global.shape == (2, 2)
@@ -86,6 +100,15 @@ class EKF:
         self.H_global = jacrev(self.h, argnums=0)
 
     def propagate(self, u_t, dt):
+        """
+        Propagate the state estimate and covariance matrix using the IMU measurement model.
+
+        Parameters:
+        u_t: np.array, shape (3, 1)
+            Control input at time t. Contains the acceleration and angular velocity.
+        dt: float
+            Time step.
+        """
         G_t = self.G(u_t, self.mu, dt).squeeze()
         H_t = self.H_imu(u_t, self.mu, dt).squeeze()
 
@@ -93,6 +116,13 @@ class EKF:
         self.Sigma = G_t @ self.Sigma @ G_t.T + H_t @ self.R @ H_t.T
 
     def update_global(self, z_t):
+        """
+        Apply a global measurement to the state estimate and covariance matrix.
+
+        Parameters:
+        z_t: np.array, shape (2, 1)
+            Global measurement.
+        """
         H_t = self.H_global(self.mu)
 
         K_t = self.Sigma @ H_t.T @ np.linalg.inv(H_t @ self.Sigma @ H_t.T + self.Q)
@@ -102,19 +132,18 @@ class EKF:
 
 if __name__ == "__main__":
     from measurements import get_imu_data
-    from plotters import plot_overview
+    from plotters import plot_overview, plot_trajectory_error
     from trajectories import sine_trajectory
-
-    import matplotlib.pyplot as plt
 
     import time
 
     np.set_printoptions(linewidth=np.inf)
+    np.random.seed(0)
 
-    total_time = 60
+    total_time = 10
     dt = 1.0 / 200
     num_steps = int(total_time / dt)
-    imu_noise_std = np.array([[0.1, 0.1, 0.05]]).T
+    imu_noise_std = np.array([[0.5, 0.5, 0.25]]).T
 
     trajectory = sine_trajectory(num_steps, np.array([[0, 0]]).T, np.array([[100, 100]]).T, 5, 2)
 
@@ -124,7 +153,10 @@ if __name__ == "__main__":
     Sigma_0 = np.eye(5) * 1e-9
     Sigma_global = np.eye(2) * 1e-9
     Sigma_imu = np.diag(imu_noise_std.squeeze()**2)
-    mu_hist = [mu_0]
+
+    mu_hist = {"Vehicle 1": [mu_0]}
+    truth_hist = {"Vehicle 1": np.pad(trajectory, ((0, 2), (0, 0)), mode='constant', constant_values=0)}
+    Sigma_hist = {"Vehicle 1": [Sigma_0.diagonal().copy().reshape(-1, 1)]}
 
     init_time = time.time()
     ekf = EKF(mu_0, Sigma_0, Sigma_global, Sigma_imu)
@@ -134,19 +166,16 @@ if __name__ == "__main__":
             print(f"Percent {i / num_steps * 100:.1f}%")
 
         ekf.propagate(imu_data[:, i].reshape(-1, 1), dt)
-        mu_hist.append(ekf.mu)
+
+        mu_hist["Vehicle 1"].append(ekf.mu.copy())
+        Sigma_hist["Vehicle 1"].append(ekf.Sigma.diagonal().copy().reshape(-1, 1))
 
     print(f"Time taken: {time.time() - init_time:.1f}s")
 
-    mu_hist = np.hstack(mu_hist)
+    mu_hist["Vehicle 1"] = np.hstack(mu_hist["Vehicle 1"])
+    Sigma_hist["Vehicle 1"] = np.hstack(Sigma_hist["Vehicle 1"])
 
-    plot_overview(poses=[[trajectory[:2], "Truth", "r"], [mu_hist[:2], "Estimate", "b"]],
+    plot_overview(poses=[[trajectory[:2], "Truth", "r"], [mu_hist["Vehicle 1"][:2], "Estimate", "b"]],
                          covariances=[[ekf.Sigma[:2, :2], ekf.mu[:2], "b"]])
+    plot_trajectory_error(mu_hist, truth_hist, Sigma_hist)
 
-    error = mu_hist[:2] - trajectory[:2]
-    error_psi = mu_hist[2] - trajectory[2]
-    plt.plot(error[0, :], label="x error")
-    plt.plot(error[1, :], label="y error")
-    plt.plot(error_psi, label="psi error")
-    plt.legend()
-    plt.show()

@@ -73,7 +73,82 @@ def plot_overview(poses=[], covariances=[], markers=[], lines=[]):
     plt.axis('equal')
     plt.xlabel('x')
     plt.ylabel('y')
-    plt.show() 
+    plt.show()
+
+
+def plot_trajectory_error(mu_hist, truth_hist, Sigma_hist):
+    """
+    Plots the individual components of the error in the trajectory estimate, with the covariance
+    bound.
+
+    Parameters:
+    mu_hist: Dictionary of nx5 numpy arrays of the state estimate for every timestep, where the key
+        is the vehicle name.
+    truth_hist: Dictionary of nx5 numpy arrays of the ground truth for every timestep, where the
+        key is the vehicle name.
+    Sigma_hist: Dictionary of nx5 numpy arrays of the standard deviation for every timestep, where
+        the key is the vehicle name.
+    """
+
+    fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
+
+    if len(mu_hist.keys()) == 1:
+        axs = np.expand_dims(axs, axis=1)
+
+    column_idx = 0
+    for key in mu_hist.keys():
+        assert key in truth_hist.keys()
+        assert key in Sigma_hist.keys()
+        assert mu_hist[key].shape == truth_hist[key].shape
+        assert mu_hist[key].shape == Sigma_hist[key].shape
+        assert truth_hist[key].shape == Sigma_hist[key].shape
+
+        error = mu_hist[key] - truth_hist[key]
+
+        # X position
+        axs[0, column_idx].plot(error[0, :], label='x error', color='r')
+        axs[0, column_idx].plot(2*Sigma_hist[key][0, :], label='2 sigma', color='b')
+        axs[0, column_idx].plot(-2*Sigma_hist[key][0, :], color='b')
+        axs[0, column_idx].set_title(key)
+        axs[0, column_idx].grid()
+
+        # Y position
+        axs[1, column_idx].plot(error[1, :], label='y error', color='r')
+        axs[1, column_idx].plot(2*Sigma_hist[key][1, :], label='2 sigma', color='b')
+        axs[1, column_idx].plot(-2*Sigma_hist[key][1, :], color='b')
+        axs[1, column_idx].grid()
+
+        # Psi
+        axs[2, column_idx].plot(error[2, :], label='psi error', color='r')
+        axs[2, column_idx].plot(2*Sigma_hist[key][2, :], label='2 sigma', color='b')
+        axs[2, column_idx].plot(-2*Sigma_hist[key][2, :], color='b')
+        axs[2, column_idx].grid()
+
+        ## Vx
+        #axs[3, column_idx].plot(error[3, :], label='vx error', color='r')
+        #axs[3, column_idx].plot(2*Sigma_hist[key][3, :], label='2 sigma', color='b')
+        #axs[3, column_idx].plot(-2*Sigma_hist[key][3, :], color='b')
+        #axs[3, column_idx].grid()
+
+        ## Vy
+        #axs[4, column_idx].plot(error[4, :], label='vy error', color='r')
+        #axs[4, column_idx].plot(2*Sigma_hist[key][4, :], label='2 sigma', color='b')
+        #axs[4, column_idx].plot(-2*Sigma_hist[key][4, :], color='b')
+        #axs[4, column_idx].grid()
+
+        # Add ylabels and legend
+        if column_idx == 0:
+            axs[0, column_idx].set_ylabel('x error')
+            axs[1, column_idx].set_ylabel('y error')
+            axs[2, column_idx].set_ylabel('psi error')
+            #axs[3, column_idx].set_ylabel('vx error')
+            #axs[4, column_idx].set_ylabel('vy error')
+            axs[0, column_idx].legend()
+
+        column_idx += 1
+
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
