@@ -49,11 +49,11 @@ def plot_overview(poses=[], covariances=[], markers=[], lines=[]):
 
         cov = covariance[0]
         mean = covariance[1].flatten()
-        eigvals, eigvecs = np.linalg.eig(cov)
+        eigvals, eigvecs = np.linalg.eigh(cov)
         angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
         ell = Ellipse(xy=(mean[0], mean[1]),
-                      width=3 * np.sqrt(eigvals[0]),
-                      height=3 * np.sqrt(eigvals[1]),
+                      width=2 * np.sqrt(eigvals[0]) * 2,
+                      height=2 * np.sqrt(eigvals[1]) * 2,
                       angle=np.rad2deg(angle),
                       edgecolor='b' if covariance[2] == "" else covariance[2],
                       facecolor='none',

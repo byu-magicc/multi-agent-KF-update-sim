@@ -140,7 +140,7 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf)
     np.random.seed(0)
 
-    total_time = 10
+    total_time = 60
     dt = 1.0 / 200
     num_steps = int(total_time / dt)
     imu_noise_std = np.array([[0.5, 0.5, 0.25]]).T
@@ -168,7 +168,7 @@ if __name__ == "__main__":
         ekf.propagate(imu_data[:, i].reshape(-1, 1), dt)
 
         mu_hist["Vehicle 1"].append(ekf.mu.copy())
-        Sigma_hist["Vehicle 1"].append(ekf.Sigma.diagonal().copy().reshape(-1, 1))
+        Sigma_hist["Vehicle 1"].append(np.sqrt(ekf.Sigma.diagonal().copy().reshape(-1, 1)))
 
     print(f"Time taken: {time.time() - init_time:.1f}s")
 
