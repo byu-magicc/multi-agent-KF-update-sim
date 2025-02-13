@@ -1,12 +1,6 @@
 import numpy as np
-import jax.numpy as jnp
-from jax import jacrev, jit
-import jax
-
-jax.config.update("jax_enable_x64", True)
 
 
-@jit
 def _g(u_t, mu_t_1, dt):
     """
     IMU propagation model. Given the previous state and the current control input,
@@ -36,17 +30,83 @@ def _g(u_t, mu_t_1, dt):
     psi_t_1 = mu_t_1[2]
     v_t_1 = mu_t_1[3:]
 
-    R_psi = jnp.array([[jnp.cos(psi_t_1), -jnp.sin(psi_t_1)],
-                       [jnp.sin(psi_t_1), jnp.cos(psi_t_1)]]).squeeze()
+    R_psi = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1)],
+                       [np.sin(psi_t_1), np.cos(psi_t_1)]]).squeeze()
 
     p_t = p_t_1 + v_t_1 * dt + 0.5 * R_psi @ a_t * dt**2
     psi_t = psi_t_1 + omega_t * dt
     v_t = v_t_1 + R_psi @ a_t * dt
 
-    return jnp.vstack([p_t, psi_t, v_t])
+    return np.vstack([p_t, psi_t, v_t])
 
 
-@jit
+def _G_mu(u_t, mu_t_1, dt):
+    """
+    Jacobian of the IMU propagation model with respect to the state.
+
+    Parameters:
+    u_t: np.array, shape (3, 1)
+        Control input at time t. Contains the acceleration and angular velocity.
+    mu_t_1: np.array, shape (5, 1)
+        State estimate at time t-1. Contains the position, orientation, and velocity.
+    dt: float
+        Time step.
+
+    Returns:
+    G_mu_t: np.array, shape (5, 5)
+    """
+
+    a_t = u_t[0:2]
+    psi_t_1 = mu_t_1[2]
+
+    R_prime = np.array([[-np.sin(psi_t_1), -np.cos(psi_t_1)],
+                        [np.cos(psi_t_1), -np.sin(psi_t_1)]]).squeeze()
+
+    p_prime_psi = 0.5 * R_prime @ a_t * dt**2
+    v_prime_psi = R_prime @ a_t * dt
+
+    G_mu_t = np.array([[1, 0, p_prime_psi.item(0), dt, 0],
+                       [0, 1, p_prime_psi.item(1), 0, dt],
+                       [0, 0, 1, 0, 0],
+                       [0, 0, v_prime_psi.item(0), 1, 0],
+                       [0, 0, v_prime_psi.item(1), 0, 1]])
+
+    return G_mu_t
+
+
+def _G_u(u_t, mu_t_1, dt):
+    """
+    Jacobian of the IMU propagation model with respect to input.
+
+    Parameters:
+    u_t: np.array, shape (3, 1)
+        Control input at time t. Contains the acceleration and angular velocity.
+    mu_t_1: np.array, shape (5, 1)
+        Current state estimate. Contains the position, orientation, and velocity.
+    dt: float
+        Time step.
+
+    Returns:
+    G_u_t: np.array, shape (5, 5)
+    """
+
+    psi_t_1 = mu_t_1[2]
+
+    R_psi = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1)],
+                      [np.sin(psi_t_1), np.cos(psi_t_1)]]).squeeze()
+
+    p_prime_a = 0.5 * R_psi * dt**2
+    v_prime_a = R_psi * dt
+
+    G_u_t = np.array([[p_prime_a[0, 0], p_prime_a[0, 1], 0],
+                      [p_prime_a[1, 0], p_prime_a[1, 1], 0],
+                      [0, 0, dt],
+                      [v_prime_a[0, 0], v_prime_a[0, 1], 0],
+                      [v_prime_a[1, 0], v_prime_a[1, 1], 0]])
+
+    return G_u_t
+
+
 def _h_global(mu_t):
     """
     Global measurement model. Given the current state, return the predicted global position.
@@ -78,7 +138,7 @@ def _H_global(mu_t):
         Jacobian of the global measurement model.
     """
 
-    H_global = jnp.eye(2, 5)
+    H_global = np.eye(2, 5)
     return H_global
 
 
@@ -111,8 +171,8 @@ class EKF:
 
         self.g = _g
         self.h_global = _h_global
-        self.G = jacrev(self.g, argnums=1)
-        self.H_imu = jacrev(self.g, argnums=0)
+        self.G_mu = _G_mu
+        self.G_u = _G_u
         self.H_global = _H_global
 
     def propagate(self, u_t, dt):
@@ -127,11 +187,11 @@ class EKF:
         """
         assert u_t.shape == (3, 1)
 
-        G_t = self.G(u_t, self.mu, dt).squeeze()
-        H_t = self.H_imu(u_t, self.mu, dt).squeeze()
+        G_mu_t = self.G_mu(u_t, self.mu, dt)
+        G_u_t = self.G_u(u_t, self.mu, dt)
 
         self.mu = self.g(u_t, self.mu, dt)
-        self.Sigma = G_t @ self.Sigma @ G_t.T + H_t @ self.R @ H_t.T
+        self.Sigma = G_mu_t @ self.Sigma @ G_mu_t.T + G_u_t @ self.R @ G_u_t.T
 
     def update_global(self, z_t):
         """
@@ -155,7 +215,6 @@ if __name__ == "__main__":
     from plotters import plot_overview, plot_trajectory_error
     from trajectories import sine_trajectory
 
-    import time
 
     np.set_printoptions(linewidth=np.inf)
     np.random.seed(0)
@@ -178,13 +237,9 @@ if __name__ == "__main__":
     truth_hist = {"Vehicle 1": np.pad(trajectory, ((0, 2), (0, 0)), mode='constant', constant_values=0)}
     Sigma_hist = {"Vehicle 1": [Sigma_0.diagonal().copy().reshape(-1, 1)]}
 
-    init_time = time.time()
     ekf = EKF(mu_0, Sigma_0, Sigma_global, Sigma_imu)
 
     for i in range(num_steps - 1):
-        if i % 1000 == 0:
-            print(f"Percent {i / num_steps * 100:.1f}%")
-
         ekf.propagate(imu_data[:, i].reshape(-1, 1), dt)
 
         mu_hist["Vehicle 1"].append(ekf.mu.copy())
@@ -193,8 +248,6 @@ if __name__ == "__main__":
         if ((i + 1) * dt) % 20 == 0:
             global_meas = trajectory[:2, i].reshape(-1, 1)
             ekf.update_global(global_meas)
-
-    print(f"Time taken: {time.time() - init_time:.1f}s")
 
     mu_hist["Vehicle 1"] = np.hstack(mu_hist["Vehicle 1"])
     Sigma_hist["Vehicle 1"] = np.hstack(Sigma_hist["Vehicle 1"])

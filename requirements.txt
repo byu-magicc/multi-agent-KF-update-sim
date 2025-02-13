@@ -1,5 +1,4 @@
 gtsam
-jax
 matplotlib
 PyQt5
 numpy
