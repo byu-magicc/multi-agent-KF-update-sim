@@ -9,7 +9,7 @@ jax.config.update("jax_enable_x64", True)
 @jit
 def _g(u_t, mu_t_1, dt):
     """
-    IMU measurement propagation model. Given the previous state and the current control input,
+    IMU propagation model. Given the previous state and the current control input,
     return the predicted state.
 
     x_t = x_t-1 + v_t-1 * dt + 0.5 * R_psi @ a_t * dt^2
@@ -24,7 +24,7 @@ def _g(u_t, mu_t_1, dt):
     dt: float
         Time step.
 
-    returns:
+    Returns:
     mu_t: np.array, shape (5, 1)
         Predicted state estimate.
     """
@@ -57,13 +57,29 @@ def _h_global(mu_t):
         Current state estimate. Contains the position, orientation, and velocity.
 
     Returns:
-    p_t: np.array, shape (2, 1)
+    np.array, shape (2, 1)
         Predicted global position.
     """
 
-    p_t = mu_t[:2]
+    h_t = mu_t[:2]
+    return h_t
 
-    return p_t
+
+def _H_global(mu_t):
+    """
+    Jacobian of the global measurement model with respect to the state.
+
+    Parameters:
+    mu_t: np.array, shape (5, 1)
+        Current state estimate. Contains the position, orientation, and velocity.
+
+    Returns:
+    H_global_t: np.array, shape (2, 5)
+        Jacobian of the global measurement model.
+    """
+
+    H_global = jnp.eye(2, 5)
+    return H_global
 
 
 class EKF:
@@ -94,10 +110,10 @@ class EKF:
         self.R = Sigma_imu
 
         self.g = _g
-        self.h = _h_global
+        self.h_global = _h_global
         self.G = jacrev(self.g, argnums=1)
         self.H_imu = jacrev(self.g, argnums=0)
-        self.H_global = jacrev(self.h, argnums=0)
+        self.H_global = _H_global
 
     def propagate(self, u_t, dt):
         """
@@ -109,6 +125,8 @@ class EKF:
         dt: float
             Time step.
         """
+        assert u_t.shape == (3, 1)
+
         G_t = self.G(u_t, self.mu, dt).squeeze()
         H_t = self.H_imu(u_t, self.mu, dt).squeeze()
 
@@ -123,10 +141,12 @@ class EKF:
         z_t: np.array, shape (2, 1)
             Global measurement.
         """
+        assert z_t.shape == (2, 1)
+
         H_t = self.H_global(self.mu)
 
         K_t = self.Sigma @ H_t.T @ np.linalg.inv(H_t @ self.Sigma @ H_t.T + self.Q)
-        self.mu = self.mu + K_t @ (z_t - self.h(self.mu))
+        self.mu = self.mu + K_t @ (z_t - self.h_global(self.mu))
         self.Sigma = (np.eye(5) - K_t @ H_t) @ self.Sigma
 
 
@@ -169,6 +189,10 @@ if __name__ == "__main__":
 
         mu_hist["Vehicle 1"].append(ekf.mu.copy())
         Sigma_hist["Vehicle 1"].append(np.sqrt(ekf.Sigma.diagonal().copy().reshape(-1, 1)))
+
+        if ((i + 1) * dt) % 20 == 0:
+            global_meas = trajectory[:2, i].reshape(-1, 1)
+            ekf.update_global(global_meas)
 
     print(f"Time taken: {time.time() - init_time:.1f}s")
 
