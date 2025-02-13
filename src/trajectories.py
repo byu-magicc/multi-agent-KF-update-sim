@@ -35,7 +35,7 @@ def arc_trajectory(n_points, start_location, end_location, angle):
     n_points (int): The number of points to generate.
     start_location (np.array): The starting location of the arc. [[x, y]].T
     end_location (np.array): The ending location of the arc. [[x, y]].T
-    angle (float): The angle of the arc in degrees at the starting point, measured from the 
+    angle (float): The angle of the arc in radians at the starting point, measured from the
         line between the start and end points.
 
     Returns:
@@ -47,7 +47,6 @@ def arc_trajectory(n_points, start_location, end_location, angle):
 
     start_location = start_location.flatten()
     end_location = end_location.flatten()
-    angle = np.deg2rad(angle)
 
     # If the angle is 0, generate a line trajectory to avoid numerical instability
     if angle == 0:

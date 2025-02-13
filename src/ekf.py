@@ -13,8 +13,10 @@ def _g(u_t, mu_t_1, dt):
     Parameters:
     u_t: np.array, shape (3, 1)
         Control input at time t. Contains the acceleration and angular velocity.
+        [[a_x, a_y, omega]].T
     mu_t_1: np.array, shape (5, 1)
         Previous state estimate. Contains the position, orientation, and velocity.
+        [[x, y, psi, v_x, v_y]].T
     dt: float
         Time step.
 
@@ -47,8 +49,10 @@ def _G_mu(u_t, mu_t_1, dt):
     Parameters:
     u_t: np.array, shape (3, 1)
         Control input at time t. Contains the acceleration and angular velocity.
+        [[a_x, a_y, omega]].T
     mu_t_1: np.array, shape (5, 1)
         State estimate at time t-1. Contains the position, orientation, and velocity.
+        [[x, y, psi, v_x, v_y]].T
     dt: float
         Time step.
 
@@ -81,8 +85,10 @@ def _G_u(u_t, mu_t_1, dt):
     Parameters:
     u_t: np.array, shape (3, 1)
         Control input at time t. Contains the acceleration and angular velocity.
+        [[a_x, a_y, omega]].T
     mu_t_1: np.array, shape (5, 1)
         Current state estimate. Contains the position, orientation, and velocity.
+        [[x, y, psi, v_x, v_y]].T
     dt: float
         Time step.
 
@@ -109,20 +115,19 @@ def _G_u(u_t, mu_t_1, dt):
 
 def _h_global(mu_t):
     """
-    Global measurement model. Given the current state, return the predicted global position.
-    Currently, the measurement is the same as the state of the position.
+    Global measurement model. Given the current state, return the predicted global pose.
 
     Parameters:
     mu_t: np.array, shape (5, 1)
         Current state estimate. Contains the position, orientation, and velocity.
+        [[x, y, psi, v_x, v_y]].T
 
     Returns:
-    np.array, shape (2, 1)
-        Predicted global position.
+    np.array, shape (3, 1)
+        Predicted global pose.
     """
 
-    h_t = mu_t[:2]
-    return h_t
+    return mu_t[:3]
 
 
 def _H_global(mu_t):
@@ -132,42 +137,34 @@ def _H_global(mu_t):
     Parameters:
     mu_t: np.array, shape (5, 1)
         Current state estimate. Contains the position, orientation, and velocity.
+        [[x, y, psi, v_x, v_y]].T
 
     Returns:
-    H_global_t: np.array, shape (2, 5)
+    H_global_t: np.array, shape (3, 5)
         Jacobian of the global measurement model.
     """
 
-    H_global = np.eye(2, 5)
-    return H_global
+    return np.eye(3, 5)
 
 
 class EKF:
     """
     Basic EKF class for IMU propagation and global measurements.
     """
-    def __init__(self, mu_0, Sigma_0, Sigma_global, Sigma_imu):
+    def __init__(self, mu_0, Sigma_0):
         """
         Parameters:
         mu_0: np.array, shape (5, 1)
             Initial state estimate. Contains the position, orientation, and velocity.
+            [[x, y, psi, v_x, v_y]].T
         Sigma_0: np.array, shape (5, 5)
             Initial covariance matrix.
-        Sigma_global: np.array, shape (2, 2)
-            Covariance matrix for the global measurement uncertainty.
-        Sigma_imu: np.array, shape (3, 3)
-            Covariance matrix for the IMU measurement uncertainty.
         """
         assert mu_0.shape == (5, 1)
         assert Sigma_0.shape == (5, 5)
-        assert Sigma_global.shape == (2, 2)
-        assert Sigma_imu.shape == (3, 3)
 
         self.mu = mu_0
         self.Sigma = Sigma_0
-
-        self.Q = Sigma_global
-        self.R = Sigma_imu
 
         self.g = _g
         self.h_global = _h_global
@@ -175,37 +172,44 @@ class EKF:
         self.G_u = _G_u
         self.H_global = _H_global
 
-    def propagate(self, u_t, dt):
+    def propagate(self, u_t, R, dt):
         """
         Propagate the state estimate and covariance matrix using the IMU measurement model.
 
         Parameters:
         u_t: np.array, shape (3, 1)
             Control input at time t. Contains the acceleration and angular velocity.
+            [[a_x, a_y, omega]].T
+        R: np.array, shape (3, 3)
+            Covariance matrix for the IMU measurement uncertainty.
         dt: float
             Time step.
         """
         assert u_t.shape == (3, 1)
+        assert R.shape == (3, 3)
 
         G_mu_t = self.G_mu(u_t, self.mu, dt)
         G_u_t = self.G_u(u_t, self.mu, dt)
 
         self.mu = self.g(u_t, self.mu, dt)
-        self.Sigma = G_mu_t @ self.Sigma @ G_mu_t.T + G_u_t @ self.R @ G_u_t.T
+        self.Sigma = G_mu_t @ self.Sigma @ G_mu_t.T + G_u_t @ R @ G_u_t.T
 
-    def update_global(self, z_t):
+    def update_global(self, z_t, Q):
         """
         Apply a global measurement to the state estimate and covariance matrix.
 
         Parameters:
-        z_t: np.array, shape (2, 1)
-            Global measurement.
+        z_t: np.array, shape (3, 1)
+            Global measurement. [[x, y, psi]].T
+        Q: np.array, shape (3, 3)
+            Covariance matrix for the global measurement uncertainty.
         """
-        assert z_t.shape == (2, 1)
+        assert z_t.shape == (3, 1)
+        assert Q.shape == (3, 3)
 
         H_t = self.H_global(self.mu)
 
-        K_t = self.Sigma @ H_t.T @ np.linalg.inv(H_t @ self.Sigma @ H_t.T + self.Q)
+        K_t = self.Sigma @ H_t.T @ np.linalg.inv(H_t @ self.Sigma @ H_t.T + Q)
         self.mu = self.mu + K_t @ (z_t - self.h_global(self.mu))
         self.Sigma = (np.eye(5) - K_t @ H_t) @ self.Sigma
 
@@ -230,24 +234,24 @@ if __name__ == "__main__":
 
     mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy(), v_0])
     Sigma_0 = np.eye(5) * 1e-9
-    Sigma_global = np.eye(2) * 1e-9
+    Sigma_global = np.diag([0.1, 0.1, 0.05])**2
     Sigma_imu = np.diag(imu_noise_std.squeeze()**2)
 
     mu_hist = {"Vehicle 1": [mu_0]}
     truth_hist = {"Vehicle 1": np.pad(trajectory, ((0, 2), (0, 0)), mode='constant', constant_values=0)}
     Sigma_hist = {"Vehicle 1": [Sigma_0.diagonal().copy().reshape(-1, 1)]}
 
-    ekf = EKF(mu_0, Sigma_0, Sigma_global, Sigma_imu)
+    ekf = EKF(mu_0, Sigma_0)
 
     for i in range(num_steps - 1):
-        ekf.propagate(imu_data[:, i].reshape(-1, 1), dt)
+        ekf.propagate(imu_data[:, i].reshape(-1, 1), Sigma_imu, dt)
 
         mu_hist["Vehicle 1"].append(ekf.mu.copy())
         Sigma_hist["Vehicle 1"].append(np.sqrt(ekf.Sigma.diagonal().copy().reshape(-1, 1)))
 
         if ((i + 1) * dt) % 20 == 0:
-            global_meas = trajectory[:2, i].reshape(-1, 1)
-            ekf.update_global(global_meas)
+            global_meas = trajectory[:3, i].reshape(-1, 1)
+            ekf.update_global(global_meas, Sigma_global)
 
     mu_hist["Vehicle 1"] = np.hstack(mu_hist["Vehicle 1"])
     Sigma_hist["Vehicle 1"] = np.hstack(Sigma_hist["Vehicle 1"])
