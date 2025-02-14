@@ -7,13 +7,31 @@ from trajectories import line_trajectory, arc_trajectory, sine_trajectory
 
 
 class TrajectoryType(Enum):
+    """
+    Enum class for trajectory types.
+    """
     LINE = 1
     ARC = 2
     SINE = 3
 
 
 class Vehicle:
+    """
+    Class for single simulation vehicle. Contains it's own sensor and filters and 'dynamics',
+    like you would expect an actual vehicle to have.
+    """
     def __init__(self, initial_pose, velocity, trajectory_type, total_time):
+        """
+        Parameters:
+        initial_pose: np.array, shape (3, 1)
+            Initial pose of the vehicle [x, y, theta] in world frame.
+        velocity: float
+            Initial velocity of the vehicle.
+        trajectory_type: TrajectoryType
+            Type of trajectory to follow.
+        total_time: float
+            Total time of the simulation in seconds.
+        """
         assert initial_pose.shape == (3, 1)
         assert trajectory_type in TrajectoryType
 
@@ -63,6 +81,15 @@ class Vehicle:
         self._current_step = 0
 
     def step(self):
+        """
+        Increment the vehicle's simulation by one timestep.
+
+        Returns:
+        mu: np.array, shape (5, 1)
+            Current state estimate. [x, y, theta, v_x, v_y]
+        Sigma: np.array, shape (5, 5)
+            Current state covariance.
+        """
         if self._current_step >= self._imu_data.shape[1]:
             return None
 
@@ -75,6 +102,21 @@ class Vehicle:
         return self._ekf.mu, self._ekf.Sigma
 
     def update(self, z_t, sigma_z):
+        """
+        Update the state estimate with a global measurement.
+
+        Parameters:
+        z_t: np.array, shape (3, 1)
+            Global measurement [x, y, theta] in world frame.
+        sigma_z: np.array, shape (3, 3)
+            Covariance of the global measurement.
+
+        Returns:
+        mu: np.array, shape (5, 1)
+            Updated state estimate. [x, y, theta, v_x, v_y]
+        Sigma: np.array, shape (5, 5)
+            Updated state covariance.
+        """
         assert z_t.shape == (3, 1)
         assert sigma_z.shape == (3, 3)
 
@@ -83,9 +125,29 @@ class Vehicle:
         return self._ekf.mu, self._ekf.Sigma
 
     def get_history(self):
-        return self._mu_hist, self._truth_hist, self._Sigma_hist
+        """
+        Get the estimate, truth and covariance history of the vehicle.
+
+        Returns:
+        mu_hist: np.array, shape (5, current_step)
+            History of state estimates.
+        truth_hist: np.array, shape (5, current_step)
+            History of true states.
+        Sigma_hist: np.array, shape (current_step, 5, 5)
+            History of state covariances.
+        """
+        return np.hstack(self._mu_hist), \
+            self._truth_hist[:, :(self._current_step + 1)], \
+            np.array(self._Sigma_hist)
 
     def get_current_time(self):
+        """
+        Get the current time of the simulation.
+
+        Returns:
+        float
+            Current time in seconds.
+        """
         return self._current_step * self._DT
 
 
@@ -108,10 +170,6 @@ if __name__ == "__main__":
             vehicle.update(global_meas, np.diag([0.5, 0.5, np.inf])**2)
 
     mu_hist, truth_hist, Sigma_hist = vehicle.get_history()
-
-    mu_hist = np.hstack(mu_hist)[:3, :]
-    truth_hist = truth_hist[:3, :]
-    Sigma_hist = np.hstack([np.sqrt(Sigma[:3, :3].diagonal().reshape(-1, 1)) for Sigma in Sigma_hist])
 
     plot_overview(poses=[[truth_hist[:2], "Truth", "r"], [mu_hist[:2], "Estimate", "b"]],
                          covariances=[[vehicle._ekf.Sigma[:2, :2], vehicle._ekf.mu[:2], "b"]])

@@ -82,12 +82,12 @@ def plot_trajectory_error(mu_hist, truth_hist, Sigma_hist):
     bound.
 
     Parameters:
-    mu_hist: Dictionary of nx5 numpy arrays of the state estimate for every timestep, where the key
+    mu_hist: Dictionary of 5xn numpy arrays of the state estimate for every timestep, where the key
         is the vehicle name.
-    truth_hist: Dictionary of nx5 numpy arrays of the ground truth for every timestep, where the
+    truth_hist: Dictionary of 5xn numpy arrays of the ground truth for every timestep, where the
         key is the vehicle name.
-    Sigma_hist: Dictionary of nx5 numpy arrays of the standard deviation for every timestep, where
-        the key is the vehicle name.
+    Sigma_hist: Dictionary of nx5x5 numpy arrays of the standard deviation for every timestep,
+        where the key is the vehicle name.
     """
 
     fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
@@ -99,9 +99,21 @@ def plot_trajectory_error(mu_hist, truth_hist, Sigma_hist):
     for key in mu_hist.keys():
         assert key in truth_hist.keys()
         assert key in Sigma_hist.keys()
+        assert mu_hist[key].shape[0] == 5
         assert mu_hist[key].shape == truth_hist[key].shape
-        assert mu_hist[key].shape == Sigma_hist[key].shape
-        assert truth_hist[key].shape == Sigma_hist[key].shape
+        assert mu_hist[key].shape[1] == Sigma_hist[key].shape[0]
+        assert Sigma_hist[key].shape[1:] == (5, 5)
+
+        # Condense mu_hist, truth_hist, and Sigma_hist to just the x, y, psi values
+        # Temporary fix, as we don't have vx and vy truth values for error plotting
+        mu_hist[key] = mu_hist[key][:3, :]
+        truth_hist[key] = truth_hist[key][:3, :]
+        Sigma_hist[key] = Sigma_hist[key][:, :3, :3]
+
+        # Get sigma values for state variables
+        Sigma_hist[key] = np.hstack([
+            np.sqrt(Sigma.diagonal().reshape(-1, 1)) for Sigma in Sigma_hist[key]
+        ])
 
         error = mu_hist[key] - truth_hist[key]
 
