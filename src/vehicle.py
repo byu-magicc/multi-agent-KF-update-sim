@@ -150,6 +150,16 @@ class Vehicle:
         """
         return self._current_step * self._DT
 
+    def is_active(self):
+        """
+        Reports if vehicle has finished it's trajectory.
+
+        Returns:
+        bool
+            True if vehicle is not at end of trajectory, false otherwise.
+        """
+        return self._current_step < self._imu_data.shape[1]
+
 
 if __name__ == "__main__":
     from plotters import plot_trajectory_error, plot_overview
