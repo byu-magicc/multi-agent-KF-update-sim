@@ -155,7 +155,8 @@ def plot_overview(trajectories: List[Trajectory] = [],
 def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
                           truth_hist: Dict[str, List[np.ndarray]],
                           Sigma_hist: Dict[str, List[np.ndarray]],
-                          num_sigma: int = 2):
+                          num_sigma: int = 2,
+                          sigma_only: bool = False):
     """
     Plots the individual components of the error in the trajectory estimate, with the covariance
     bound.
@@ -169,6 +170,8 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
         Covariance of estimate for every timestep, where the key is the vehicle name.
     num_sigma: int
         Number of standard deviations to plot for covariance.
+    sigma_only: bool
+        If True, only plot the covariance bound. Useful for very large numbers of trajectories
     """
 
     # Check inputs
@@ -189,7 +192,56 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
     overlay_plots = len(next(iter(mu_hist.values()))) > 1
     alpha = 0.5 if overlay_plots else 1.0
 
-    # Create plot
+    # Calculate population standard deviation
+    calculated_Sigma = {}
+    if overlay_plots:
+        for key in mu_hist.keys():
+            residuals = []
+            for i in range(len(mu_hist[key])):
+                residuals.append((mu_hist[key][i] - truth_hist[key][i])**2)
+            residuals = np.array(residuals)
+            calculated_Sigma[key] = np.sqrt(np.mean(residuals, axis=0))
+
+    # Covariance only plot
+    if sigma_only:
+        fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
+        column_idx = 0
+        for key in mu_hist.keys():
+            curr_Sigma = Sigma_hist[key][0][:, :3, :3]
+            curr_Sigma = np.hstack([
+                np.sqrt(Sigma.diagonal().reshape(-1, 1)) for Sigma in curr_Sigma
+            ])
+
+            # X
+            axs[0, column_idx].plot(curr_Sigma[0, :], label='Estimator Sigma', color='b')
+            axs[0, column_idx].plot(calculated_Sigma[key][0, :], label='Actual Sigma', color='g')
+            axs[0, column_idx].set_title(key)
+            axs[0, column_idx].grid()
+
+            # Y
+            axs[1, column_idx].plot(curr_Sigma[1, :], color='b')
+            axs[1, column_idx].plot(calculated_Sigma[key][1, :], color='g')
+            axs[1, column_idx].grid()
+
+            # Psi
+            axs[2, column_idx].plot(curr_Sigma[2, :], color='b')
+            axs[2, column_idx].plot(calculated_Sigma[key][2, :], color='g')
+            axs[2, column_idx].grid()
+
+            # Add ylabels and legend
+            if column_idx == 0:
+                axs[0, column_idx].set_ylabel('X Error (m)')
+                axs[1, column_idx].set_ylabel('Y Error (m)')
+                axs[2, column_idx].set_ylabel('Psi Error (rad)')
+                axs[0, column_idx].legend()
+
+            column_idx += 1
+
+        plt.tight_layout()
+        plt.show()
+        return
+
+    # Create full plot
     fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
     if len(mu_hist.keys()) == 1:
         axs = np.expand_dims(axs, axis=1)
@@ -218,11 +270,16 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
             if i == 0:
                 axs[0, column_idx].plot(error[0, :], label='Error', color='r', alpha=alpha)
                 axs[0, column_idx].plot(num_sigma*curr_Sigma[0, :],
-                                        label=f'{num_sigma} Sigma',
+                                        label=f'Estimator {num_sigma} Sigma',
                                         color='b')
                 axs[0, column_idx].plot(-num_sigma*curr_Sigma[0, :], color='b')
                 axs[0, column_idx].set_title(key)
                 axs[0, column_idx].grid()
+
+                if overlay_plots:
+                    axs[0, column_idx].plot(num_sigma*calculated_Sigma[key][0, :],
+                                            label=f'Calculated {num_sigma} Sigma', color='g')
+                    axs[0, column_idx].plot(-num_sigma*calculated_Sigma[key][0, :], color='g')
             else:
                 axs[0, column_idx].plot(error[0, :], color='r', alpha=alpha)
 
@@ -233,6 +290,11 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
                 axs[1, column_idx].plot(-num_sigma*curr_Sigma[1, :], color='b')
                 axs[1, column_idx].grid()
 
+                if overlay_plots:
+                    axs[1, column_idx].plot(num_sigma*calculated_Sigma[key][1, :],
+                                label=f'Actual {num_sigma} Sigma', color='g')
+                    axs[1, column_idx].plot(-num_sigma*calculated_Sigma[key][1, :], color='g')
+
             # Psi
             axs[2, column_idx].plot(error[2, :], color='r', alpha=alpha)
             if i == 0:
@@ -240,27 +302,16 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
                 axs[2, column_idx].plot(-num_sigma*curr_Sigma[2, :], color='b')
                 axs[2, column_idx].grid()
 
-            ## Vx
-            #axs[3, column_idx].plot(error[3, :], color='r', alpha=alpha)
-            #if i == 0:
-            #    axs[3, column_idx].plot(num_sigma*Sigma[3, :], color='b')
-            #    axs[3, column_idx].plot(-num_sigma*Sigma[3, :], color='b')
-            #    axs[3, column_idx].grid()
-
-            ## Vy
-            #axs[4, column_idx].plot(error[4, :], color='r', alpha=alpha)
-            #if i == 0:
-            #    axs[4, column_idx].plot(num_sigma*Sigma[4, :], color='b')
-            #    axs[4, column_idx].plot(-num_sigma*Sigma[4, :], color='b')
-            #    axs[4, column_idx].grid()
+                if overlay_plots:
+                    axs[2, column_idx].plot(num_sigma*calculated_Sigma[key][2, :],
+                    label=f'Actual {num_sigma} Sigma', color='g')
+                    axs[2, column_idx].plot(-num_sigma*calculated_Sigma[key][2, :], color='g')
 
             # Add ylabels and legend
             if column_idx == 0:
-                axs[0, column_idx].set_ylabel('X Error')
-                axs[1, column_idx].set_ylabel('Y Error')
-                axs[2, column_idx].set_ylabel('Psi Error')
-                #axs[3, column_idx].set_ylabel('Vx Error')
-                #axs[4, column_idx].set_ylabel('Vy Error')
+                axs[0, column_idx].set_ylabel('X Error (m)')
+                axs[1, column_idx].set_ylabel('Y Error (m)')
+                axs[2, column_idx].set_ylabel('Psi Error (rad)')
                 axs[0, column_idx].legend()
 
         column_idx += 1

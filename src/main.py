@@ -67,8 +67,12 @@ def main(num_instances: int):
     poses[1].name = "Truth"
     covariances[0].name = f"{num_sigma} Sigma Bound"
 
-    plot_overview(poses, covariances, num_sigma=num_sigma)
-    plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=num_sigma)
+    if num_instances <= 100:
+        plot_overview(poses, covariances, num_sigma=num_sigma)
+        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=num_sigma)
+    else:
+        print('Only plotting sigma bounds since instances > 100')
+        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=num_sigma, sigma_only=True)
 
 
 if __name__ == "__main__":
