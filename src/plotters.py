@@ -1,13 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
+from typing import List, Dict
 
 
 class Trajectory:
     """
     Struct for plot_overview function, containing all pose information and plotting parameters.
     """
-    def __init__(self, pose_array, name="", color="b", opacity=1.0):
+    def __init__(self, pose_array: np.ndarray, name: str = "",
+                 color: str = "b", opacity: float = 1.0):
         """
         pose_array: np.array (2, n)
             Array of all poses that a vehicle traveled during a trajectory.
@@ -34,7 +36,8 @@ class Covariance:
     Struct for plot_overview function, containing all Covariance ellipse information and plotting
     parameters.
     """
-    def __init__(self, covariance_array, mean, name="", color="b"):
+    def __init__(self, covariance_array: np.ndarray, mean: np.ndarray,
+                 name: str = "", color:str = "b"):
         """
         covariance_array: np.array (2, 2)
             Covariance of ellipse.
@@ -58,7 +61,7 @@ class Markers:
     """
     Struct for plot_overview function, containing all marker information and plotting parameters.
     """
-    def __init__(self, location, color="b"):
+    def __init__(self, location: np.ndarray, color:str = "b"):
         """
         location: np.array (2, 1)
             Location to center marker at.
@@ -75,7 +78,7 @@ class Lines:
     """
     Struct for plot_overview function, containing all line information and plotting parameters.
     """
-    def __init__(self, endpoints, color="b"):
+    def __init__(self, endpoints: np.ndarray, color: str = "b"):
         """
         endpoints: np.array (2, 2)
             The start and end points of the line. [[x1, x2], [y1, y2]]
@@ -87,7 +90,11 @@ class Lines:
         self.color = color
 
 
-def plot_overview(trajectories = [], covariances = [], markers = [], lines = [], num_sigma=2):
+def plot_overview(trajectories: List[Trajectory] = [],
+                  covariances: List[Covariance] = [],
+                  markers: List[Markers] = [],
+                  lines: List[Lines] = [],
+                  num_sigma: int = 2):
     """
     Plots the top-down view of various agent trajectories, covariance elipses, global measurement
     markers, and range markers.
@@ -110,19 +117,15 @@ def plot_overview(trajectories = [], covariances = [], markers = [], lines = [],
 
     # Plot range markers
     for line in lines:
-        assert isinstance(line, Lines)
         plt.plot(line.endpoints[0, :], line.endpoints[1, :], color=line.color, linewidth=0.75)
 
     # Plot trajectories
     for pose in trajectories:
-        assert isinstance(pose, Trajectory)
         plt.plot(pose.poses[0, :], pose.poses[1, :], label=pose.name, color=pose.color,
                  alpha=pose.opacity)
 
     # Plot covariance ellipses
     for covariance in covariances:
-        assert isinstance(covariance, Covariance)
-
         cov = covariance.covariance_array
         mean = covariance.mean.flatten()
         eigvals, eigvecs = np.linalg.eigh(cov)
@@ -140,8 +143,6 @@ def plot_overview(trajectories = [], covariances = [], markers = [], lines = [],
 
     # Plot global measurement markers
     for marker in markers:
-        assert isinstance(marker, Markers)
-
         plt.plot(marker.location[0, :], marker.location[1, :], 'x', color=marker.color, markersize=8)
 
     plt.legend()
@@ -151,89 +152,116 @@ def plot_overview(trajectories = [], covariances = [], markers = [], lines = [],
     plt.show()
 
 
-def plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=2):
+def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
+                          truth_hist: Dict[str, List[np.ndarray]],
+                          Sigma_hist: Dict[str, List[np.ndarray]],
+                          num_sigma: int = 2):
     """
     Plots the individual components of the error in the trajectory estimate, with the covariance
     bound.
 
     Parameters:
-    mu_hist: Dictionary of 5xn numpy arrays of the state estimate for every timestep, where the key
-        is the vehicle name.
-    truth_hist: Dictionary of 5xn numpy arrays of the ground truth for every timestep, where the
-        key is the vehicle name.
-    Sigma_hist: Dictionary of nx5x5 numpy arrays of the standard deviation for every timestep,
-        where the key is the vehicle name.
-    num_sigma: Number of standard deviations to plot for covariance.
+    mu_hist: Dictionary of np.arrays (5 x n)
+        State estimate for every timestep, where the key is the vehicle name.
+    truth_hist: Dictionary of np.arrays (5 x n)
+        Ground truth for every timestep, where the key is the vehicle name.
+    Sigma_hist: Dictionary of np.arrays (n x 5 x 5)
+        Covariance of estimate for every timestep, where the key is the vehicle name.
+    num_sigma: int
+        Number of standard deviations to plot for covariance.
     """
 
-    fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
+    # Check inputs
+    for key in mu_hist.keys():
+        assert key in truth_hist.keys()
+        assert key in Sigma_hist.keys()
+        assert len(mu_hist[key]) == len(truth_hist[key])
+        assert len(mu_hist[key]) == len(Sigma_hist[key])
 
+        for i in range(len(mu_hist[key])):
+            assert mu_hist[key][i].shape[0] == 5
+            assert mu_hist[key][i].ndim == 2
+            assert mu_hist[key][i].shape == truth_hist[key][i].shape
+            assert mu_hist[key][i].shape[1] == Sigma_hist[key][i].shape[0]
+            assert Sigma_hist[key][i].shape[1:] == (5, 5)
+
+    # Check if we have multiple instances
+    overlay_plots = len(next(iter(mu_hist.values()))) > 1
+    alpha = 0.5 if overlay_plots else 1.0
+
+    # Create plot
+    fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
     if len(mu_hist.keys()) == 1:
         axs = np.expand_dims(axs, axis=1)
 
     column_idx = 0
     for key in mu_hist.keys():
-        assert key in truth_hist.keys()
-        assert key in Sigma_hist.keys()
-        assert mu_hist[key].shape[0] == 5
-        assert mu_hist[key].shape == truth_hist[key].shape
-        assert mu_hist[key].shape[1] == Sigma_hist[key].shape[0]
-        assert Sigma_hist[key].shape[1:] == (5, 5)
+        for i in range(len(mu_hist[key])):
+            curr_mu = mu_hist[key][i]
+            curr_truth = truth_hist[key][i]
+            curr_Sigma = Sigma_hist[key][i]
 
-        # Condense mu_hist, truth_hist, and Sigma_hist to just the x, y, psi values
-        # Temporary fix, as we don't have vx and vy truth values for error plotting
-        mu_hist[key] = mu_hist[key][:3, :]
-        truth_hist[key] = truth_hist[key][:3, :]
-        Sigma_hist[key] = Sigma_hist[key][:, :3, :3]
+            # Condense mu, truth, and Sigma to just the x, y, psi values
+            # Temporary fix, as we don't have vx and vy truth values for error plotting
+            curr_mu = curr_mu[:3, :]
+            curr_truth = curr_truth[:3, :]
+            curr_Sigma = curr_Sigma[:, :3, :3]
 
-        # Get sigma values for state variables
-        Sigma_hist[key] = np.hstack([
-            np.sqrt(Sigma.diagonal().reshape(-1, 1)) for Sigma in Sigma_hist[key]
-        ])
+            # Get sigma values for state variables
+            curr_Sigma = np.hstack([
+                np.sqrt(Sigma.diagonal().reshape(-1, 1)) for Sigma in curr_Sigma
+            ])
 
-        error = mu_hist[key] - truth_hist[key]
+            error = curr_mu - curr_truth
 
-        # X position
-        axs[0, column_idx].plot(error[0, :], label='Error', color='r')
-        axs[0, column_idx].plot(num_sigma*Sigma_hist[key][0, :],
-                                label=f'{num_sigma} Sigma',
-                                color='b')
-        axs[0, column_idx].plot(-num_sigma*Sigma_hist[key][0, :], color='b')
-        axs[0, column_idx].set_title(key)
-        axs[0, column_idx].grid()
+            # X position
+            if i == 0:
+                axs[0, column_idx].plot(error[0, :], label='Error', color='r', alpha=alpha)
+                axs[0, column_idx].plot(num_sigma*curr_Sigma[0, :],
+                                        label=f'{num_sigma} Sigma',
+                                        color='b')
+                axs[0, column_idx].plot(-num_sigma*curr_Sigma[0, :], color='b')
+                axs[0, column_idx].set_title(key)
+                axs[0, column_idx].grid()
+            else:
+                axs[0, column_idx].plot(error[0, :], color='r', alpha=alpha)
 
-        # Y position
-        axs[1, column_idx].plot(error[1, :], color='r')
-        axs[1, column_idx].plot(num_sigma*Sigma_hist[key][1, :], color='b')
-        axs[1, column_idx].plot(-num_sigma*Sigma_hist[key][1, :], color='b')
-        axs[1, column_idx].grid()
+            # Y position
+            axs[1, column_idx].plot(error[1, :], color='r', alpha=alpha)
+            if i == 0:
+                axs[1, column_idx].plot(num_sigma*curr_Sigma[1, :], color='b')
+                axs[1, column_idx].plot(-num_sigma*curr_Sigma[1, :], color='b')
+                axs[1, column_idx].grid()
 
-        # Psi
-        axs[2, column_idx].plot(error[2, :], color='r')
-        axs[2, column_idx].plot(num_sigma*Sigma_hist[key][2, :], color='b')
-        axs[2, column_idx].plot(-num_sigma*Sigma_hist[key][2, :], color='b')
-        axs[2, column_idx].grid()
+            # Psi
+            axs[2, column_idx].plot(error[2, :], color='r', alpha=alpha)
+            if i == 0:
+                axs[2, column_idx].plot(num_sigma*curr_Sigma[2, :], color='b')
+                axs[2, column_idx].plot(-num_sigma*curr_Sigma[2, :], color='b')
+                axs[2, column_idx].grid()
 
-        ## Vx
-        #axs[3, column_idx].plot(error[3, :], color='r')
-        #axs[3, column_idx].plot(num_sigma*Sigma_hist[key][3, :], color='b')
-        #axs[3, column_idx].plot(-num_sigma*Sigma_hist[key][3, :], color='b')
-        #axs[3, column_idx].grid()
+            ## Vx
+            #axs[3, column_idx].plot(error[3, :], color='r', alpha=alpha)
+            #if i == 0:
+            #    axs[3, column_idx].plot(num_sigma*Sigma[3, :], color='b')
+            #    axs[3, column_idx].plot(-num_sigma*Sigma[3, :], color='b')
+            #    axs[3, column_idx].grid()
 
-        ## Vy
-        #axs[4, column_idx].plot(error[4, :], color='r')
-        #axs[4, column_idx].plot(num_sigma*Sigma_hist[key][4, :], color='b')
-        #axs[4, column_idx].plot(-num_sigma*Sigma_hist[key][4, :], color='b')
-        #axs[4, column_idx].grid()
+            ## Vy
+            #axs[4, column_idx].plot(error[4, :], color='r', alpha=alpha)
+            #if i == 0:
+            #    axs[4, column_idx].plot(num_sigma*Sigma[4, :], color='b')
+            #    axs[4, column_idx].plot(-num_sigma*Sigma[4, :], color='b')
+            #    axs[4, column_idx].grid()
 
-        # Add ylabels and legend
-        if column_idx == 0:
-            axs[0, column_idx].set_ylabel('X Error')
-            axs[1, column_idx].set_ylabel('Y Error')
-            axs[2, column_idx].set_ylabel('Psi Error')
-            #axs[3, column_idx].set_ylabel('Vx Error')
-            #axs[4, column_idx].set_ylabel('Vy Error')
-            axs[0, column_idx].legend()
+            # Add ylabels and legend
+            if column_idx == 0:
+                axs[0, column_idx].set_ylabel('X Error')
+                axs[1, column_idx].set_ylabel('Y Error')
+                axs[2, column_idx].set_ylabel('Psi Error')
+                #axs[3, column_idx].set_ylabel('Vx Error')
+                #axs[4, column_idx].set_ylabel('Vy Error')
+                axs[0, column_idx].legend()
 
         column_idx += 1
 
