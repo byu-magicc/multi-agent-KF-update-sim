@@ -59,7 +59,7 @@ class Simulation:
 
 
 if __name__ == "__main__":
-    from plotters import plot_trajectory_error, plot_overview
+    from plotters import plot_trajectory_error, plot_overview, Trajectory, Covariance
 
     np.random.seed(1)
 
@@ -74,11 +74,11 @@ if __name__ == "__main__":
     truth_hist = {}
     Sigma_hist = {}
     for i in range(len(simulation.vehicles)):
-        poses.append([mu_hist_array[i][:2, :], f"{i} Estimate", "b"])
-        poses.append([truth_hist_array[i][:2, :], f"{i} Truth", "r"])
-        covariances.append([Sigma_hist_array[i][-1, :2, :2],
-                            mu_hist_array[i][:2, -1].reshape(-1, 1),
-                            "b"])
+        poses.append(Trajectory(mu_hist_array[i][:2, :], name=f"{i} Estimate", color="b"))
+        poses.append(Trajectory(truth_hist_array[i][:2, :], name=f"{i} Truth", color="r"))
+        covariances.append(Covariance(Sigma_hist_array[i][-1, :2, :2],
+                           mu_hist_array[i][:2, -1].reshape(-1, 1),
+                           color="b"))
 
         mu_hist[i] = mu_hist_array[i]
         truth_hist[i] = truth_hist_array[i]

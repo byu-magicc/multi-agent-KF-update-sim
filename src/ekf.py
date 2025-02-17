@@ -216,7 +216,7 @@ class EKF:
 
 if __name__ == "__main__":
     from measurements import get_imu_data
-    from plotters import plot_overview, plot_trajectory_error
+    from plotters import plot_overview, plot_trajectory_error, Trajectory, Covariance
     from trajectories import sine_trajectory
 
 
@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
     mu_hist = {"Vehicle 1": [mu_0]}
     truth_hist = {"Vehicle 1": np.pad(trajectory, ((0, 2), (0, 0)), mode='constant', constant_values=0)}
-    Sigma_hist = {"Vehicle 1": [Sigma_0.diagonal().copy().reshape(-1, 1)]}
+    Sigma_hist = {"Vehicle 1": [Sigma_0.copy()]}
 
     ekf = EKF(mu_0, Sigma_0)
 
@@ -247,16 +247,17 @@ if __name__ == "__main__":
         ekf.propagate(imu_data[:, i].reshape(-1, 1), Sigma_imu, dt)
 
         mu_hist["Vehicle 1"].append(ekf.mu.copy())
-        Sigma_hist["Vehicle 1"].append(np.sqrt(ekf.Sigma.diagonal().copy().reshape(-1, 1)))
+        Sigma_hist["Vehicle 1"].append(ekf.Sigma.copy())
 
         if ((i + 1) * dt) % 20 == 0:
             global_meas = trajectory[:3, i].reshape(-1, 1)
             ekf.update_global(global_meas, Sigma_global)
 
     mu_hist["Vehicle 1"] = np.hstack(mu_hist["Vehicle 1"])
-    Sigma_hist["Vehicle 1"] = np.hstack(Sigma_hist["Vehicle 1"])
+    Sigma_hist["Vehicle 1"] = np.array(Sigma_hist["Vehicle 1"])
 
-    plot_overview(poses=[[trajectory[:2], "Truth", "r"], [mu_hist["Vehicle 1"][:2], "Estimate", "b"]],
-                         covariances=[[ekf.Sigma[:2, :2], ekf.mu[:2], "b"]])
+    plot_overview(trajectories=[Trajectory(trajectory[:2], name="Truth", color="r"),
+                                Trajectory(mu_hist["Vehicle 1"][:2], name="Estimate", color="b")],
+                  covariances=[Covariance(ekf.Sigma[:2, :2], ekf.mu[:2], color="b")])
     plot_trajectory_error(mu_hist, truth_hist, Sigma_hist)
 

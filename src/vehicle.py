@@ -162,7 +162,7 @@ class Vehicle:
 
 
 if __name__ == "__main__":
-    from plotters import plot_trajectory_error, plot_overview
+    from plotters import plot_trajectory_error, plot_overview, Trajectory, Covariance
 
     np.set_printoptions(linewidth=np.inf)
     np.random.seed(1)
@@ -181,7 +181,9 @@ if __name__ == "__main__":
 
     mu_hist, truth_hist, Sigma_hist = vehicle.get_history()
 
-    plot_overview(poses=[[truth_hist[:2], "Truth", "r"], [mu_hist[:2], "Estimate", "b"]],
-                         covariances=[[vehicle._ekf.Sigma[:2, :2], vehicle._ekf.mu[:2], "b"]])
+    plot_overview(trajectories=[Trajectory(truth_hist[:2], name="Truth", color='r'),
+                                Trajectory(mu_hist[:2], name="Estimate", color='b')],
+                  covariances=[Covariance(vehicle._ekf.Sigma[:2, :2], vehicle._ekf.mu[:2], color="b")]
+    )
     plot_trajectory_error({"Vehicle 1": mu_hist}, {"Vehicle 1": truth_hist}, {"Vehicle 1": Sigma_hist})
 
