@@ -17,9 +17,9 @@ def main(num_instances: int):
     # Set random seed for reproducibility, but only if running a single instance
     # Multiple instances would return the same result if the same seed is used
     if num_instances == 1:
-        np.random.seed(1)
+        np.random.seed(0)
 
-    num_sigma = 3
+    num_sigma = 2
 
     # Run simulations in parallel on multiple cores
     start_time = time.time()
@@ -28,6 +28,7 @@ def main(num_instances: int):
     print(f"Elapsed time: {time.time() - start_time:.2f} seconds")
 
     num_vehicles = len(Simulation().vehicles)
+    dt = Simulation().vehicles[0]._DT
 
     # Extract data for plotting
     poses = []
@@ -69,10 +70,10 @@ def main(num_instances: int):
 
     if num_instances <= 100:
         plot_overview(poses, covariances, num_sigma=num_sigma)
-        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=num_sigma)
+        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, dt, num_sigma=num_sigma)
     else:
         print('Only plotting sigma bounds since instances > 100')
-        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=num_sigma, sigma_only=True)
+        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, dt, num_sigma=num_sigma, sigma_only=True)
 
 
 if __name__ == "__main__":
