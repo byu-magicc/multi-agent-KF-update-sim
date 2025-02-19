@@ -1,5 +1,0 @@
-gtsam
-matplotlib
-PyQt5
-numpy
-scipy

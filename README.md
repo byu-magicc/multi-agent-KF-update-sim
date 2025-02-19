@@ -2,11 +2,9 @@
 
 This is a small python simulator for testing a potential method for using information from a factor graph multi-agent backend within an existing KF single-agent system.
 
-Tested on Ubuntu 22.04 (in Distrobox).
+Tested with GTSAM docker image (in Distrobox): docker.io/borglab/gtsam:4.2.0-tbb-ON-python-ON_22.04
 
-Create environment and install dependencies:
+Install apt dependencies and run code (I'm not using virtual environments as system installations of GTSAM sometimes struggled with those for some reason):
 ```
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+sudo apt install python3-numpy python3-matplotlib python3-pyqt6.sip
 ```
