@@ -12,6 +12,7 @@ import numpy as np
 PRIOR_NOISE = gtsam.noiseModel.Diagonal.Sigmas(np.array([0.01, 0.01, 0.01]))
 ODOMETRY_NOISE = gtsam.noiseModel.Diagonal.Sigmas(np.array([0.2, 0.2, 0.1]))
 GLOBAL_NOISE = gtsam.noiseModel.Diagonal.Sigmas(np.array([0.1, 0.1, np.inf]))
+RANGE_NOISE = gtsam.noiseModel.Isotropic.Sigma(1, 0.01)
 
 
 def error_global(measurement: np.ndarray,
@@ -86,6 +87,11 @@ def main():
     )
     graph.add(
         gtsam.BetweenFactorPose2(X9, X10, gtsam.Pose2(2.0, 0.0, 0.0), ODOMETRY_NOISE)
+    )
+
+    # Add range factor
+    graph.add(
+        gtsam.RangeFactorPose2(X3, X8, 5.0, RANGE_NOISE)
     )
 
     # Add global measurement
