@@ -18,6 +18,8 @@ class Simulation:
         ]
         VELOCITY = 15.0
         TRAJECTORY_TYPE = TrajectoryType.SINE
+        self.MAX_KEYFRAME_TIME = 10.0
+        self.GPS_TIME = 60.0
 
         # Create vehicles
         self.vehicles = [
@@ -43,10 +45,14 @@ class Simulation:
             for i, vehicle in enumerate(self.vehicles):
                 if self.active_vehicles[i]:
                     # Apply simulated global measurement
-                    if vehicle.get_current_time() == 60.0:
+                    if vehicle.get_current_time() == self.GPS_TIME:
                         global_meas = vehicle._truth_hist[:3, vehicle._current_step].reshape(-1, 1)
                         global_meas += np.random.normal([0, 0, 0], [0.5, 0.5, 0]).reshape(-1, 1)
                         vehicle.update(global_meas, np.diag([0.5, 0.5, np.inf])**2)
+
+                    # Apply simulated keyframe resets
+                    if vehicle.get_current_time() % self.MAX_KEYFRAME_TIME == 0:
+                        vehicle.keyframe_reset()
 
                     vehicle.step()
                     if not vehicle.is_active():

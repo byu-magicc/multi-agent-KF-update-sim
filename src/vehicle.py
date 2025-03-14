@@ -71,6 +71,14 @@ class Vehicle:
         self._Sigma_imu = np.diag(IMU_NOISE_STD.squeeze()**2)
         self._ekf = EKF(mu_0, Sigma_0)
 
+        # Initialize keyframe EKF
+        theta = mu_0.item(2)
+        rot = np.array([[np.cos(theta), -np.sin(theta)],
+                        [np.sin(theta), np.cos(theta)]])
+        keyframe_v_0 = rot.T @ v_0.copy()
+        keyframe_mu_0 = np.vstack([np.zeros((3,1)), keyframe_v_0])
+        self._keyframe_ekf = EKF(keyframe_mu_0, Sigma_0.copy())
+
         # Initialize history
         self._mu_hist = [mu_0]
         # TODO: Add velocity to truth_hist (also update plotter)
@@ -93,7 +101,10 @@ class Vehicle:
         if self._current_step >= self._imu_data.shape[1]:
             return None
 
-        self._ekf.propagate(self._imu_data[:, self._current_step].reshape(-1, 1), self._Sigma_imu, self._DT)
+        self._ekf.propagate(self._imu_data[:, self._current_step].reshape(-1, 1),
+                            self._Sigma_imu, self._DT)
+        self._keyframe_ekf.propagate(self._imu_data[:, self._current_step].reshape(-1, 1),
+                                     self._Sigma_imu, self._DT)
         self._current_step += 1
 
         self._mu_hist.append(self._ekf.mu.copy())
@@ -159,6 +170,12 @@ class Vehicle:
             True if vehicle is not at end of trajectory, false otherwise.
         """
         return self._current_step < self._imu_data.shape[1]
+
+    def keyframe_reset(self):
+        """
+        Resets keyframe EKF and returns the keyframe state and covariance prior to the reset.
+        """
+        return self._keyframe_ekf.reset_state()
 
 
 if __name__ == "__main__":
