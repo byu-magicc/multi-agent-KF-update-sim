@@ -111,11 +111,11 @@ class Backend:
             self.graph.add(
                 gtsam.PriorFactorPose2(
                     self.next_id,
-                    gtsam.Pose2(prior.mean.flatten()),
+                    gtsam.Pose2(*prior.mean),
                     gtsam.noiseModel.Diagonal.Sigmas(prior.Sigmas.flatten())
                 )
             )
-            self.current_estimates.insert(self.next_id, gtsam.Pose2(prior.mean.flatten()))
+            self.current_estimates.insert(self.next_id, gtsam.Pose2(*prior.mean))
             self.vehicle_pose_ids[prior.vehicle] = [self.next_id]
             self.next_id += 1
 
@@ -139,7 +139,7 @@ class Backend:
             gtsam.BetweenFactorPose2(
                 self.vehicle_pose_ids[odometry.vehicle][-1],
                 self.next_id,
-                gtsam.Pose2(odometry.mean.flatten()),
+                gtsam.Pose2(*odometry.mean),
                 gtsam.noiseModel.Diagonal.Sigmas(odometry.Sigmas.flatten())
             )
         )
@@ -150,7 +150,7 @@ class Backend:
             self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).y(),
             self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).theta()
         ]).reshape(-1, 1) + odometry.mean
-        self.current_estimates.insert(self.next_id, gtsam.Pose2(estimate.flatten()))
+        self.current_estimates.insert(self.next_id, gtsam.Pose2(*estimate))
 
         # Add the new pose id to the vehicle's list
         self.vehicle_pose_ids[odometry.vehicle].append(self.next_id)
@@ -254,7 +254,7 @@ class Backend:
              self.current_estimates.atPose2(i).y(),
              self.current_estimates.atPose2(i).theta()]
             for i in self.vehicle_pose_ids[vehicle]
-        ])
+        ]).T
 
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
         covariances = np.array([
@@ -349,13 +349,13 @@ if __name__ == "__main__":
     poses_2, covariances_2 = backend.get_full_trajectory("B")
 
     plt.figure()
-    plt.plot(poses_1[:, 0], poses_1[:, 1], color="b", marker="o", label="A")
-    plt.plot(poses_2[:, 0], poses_2[:, 1], color="g", marker="o", label="B")
+    plt.plot(poses_1[0, :], poses_1[1, :], color="b", marker="o", label="A")
+    plt.plot(poses_2[0, :], poses_2[1, :], color="g", marker="o", label="B")
 
-    for i in range(len(poses_1)):
+    for i in range(poses_1.shape[1]):
         num_sigma = 2
         cov = covariances_1[i][:2, :2]
-        mean = poses_1[i, :2]
+        mean = poses_1[:2, i]
         eigvals, eigvecs = np.linalg.eigh(cov)
         angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
         ell = Ellipse(xy=(mean[0], mean[1]),
@@ -367,10 +367,10 @@ if __name__ == "__main__":
                       zorder=4,
                       )
         plt.gca().add_artist(ell)
-    for i in range(len(poses_2)):
+    for i in range(poses_2.shape[1]):
         num_sigma = 2
         cov = covariances_2[i][:2, :2]
-        mean = poses_2[i, :2]
+        mean = poses_2[:2, i]
         eigvals, eigvecs = np.linalg.eigh(cov)
         angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
         ell = Ellipse(xy=(mean[0], mean[1]),

@@ -234,7 +234,7 @@ class EKF:
         self.Sigma = np.eye(5) * 1e-9
         self.Sigma[3:, 3:] = current_Sigma[3:, 3:].copy()
 
-        return current_mu, current_Sigma
+        return current_mu[:3], current_Sigma[:3, :3]
 
 
 if __name__ == "__main__":
