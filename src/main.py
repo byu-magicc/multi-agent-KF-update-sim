@@ -40,15 +40,25 @@ def main(num_instances: int):
         mu_hist_array = result[0]
         truth_hist_array = result[1]
         Sigma_hist_array = result[2]
+        keyframe_mu_hist_array = result[3]
+        keyframe_Sigma_hist_array = result[4]
 
         for i in range(num_vehicles):
             poses.append(Trajectory(truth_hist_array[i][:2, :], color="r"))
 
             if num_instances == 1:
                 poses.append(Trajectory(mu_hist_array[i][:2, :], color="b"))
+                poses.append(Trajectory(keyframe_mu_hist_array[i][:2, :], color="g"))
                 covariances.append(Covariance(Sigma_hist_array[i][-1, :2, :2],
                                               mu_hist_array[i][:2, -1].reshape(-1, 1),
                                               color="k"))
+
+                for j in range(keyframe_mu_hist_array[i].shape[1]):
+                    keyframe_mu = keyframe_mu_hist_array[i][:2, j].reshape(-1, 1)
+                    keyframe_cov = keyframe_Sigma_hist_array[i][j]
+                    covariances.append(Covariance(keyframe_cov[:2, :2],
+                                                  keyframe_mu[:2].reshape(-1, 1),
+                                                  color="g"))
             else:
                 poses.append(Trajectory(mu_hist_array[i][:2, :], color="b", opacity=0.5))
                 if len(covariances) < num_vehicles:
@@ -64,8 +74,8 @@ def main(num_instances: int):
                 truth_hist[f'Vehicle {i}'].append(truth_hist_array[i])
                 Sigma_hist[f'Vehicle {i}'].append(Sigma_hist_array[i])
 
-    poses[0].name = "Estimate"
-    poses[1].name = "Truth"
+    poses[0].name = "Truth"
+    poses[1].name = "Estimate"
     covariances[0].name = f"{num_sigma} Sigma Bound"
 
     if num_instances <= 100:

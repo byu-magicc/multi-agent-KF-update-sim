@@ -20,13 +20,15 @@ class Vehicle:
     Class for single simulation vehicle. Contains it's own sensor and filters and 'dynamics',
     like you would expect an actual vehicle to have.
     """
-    def __init__(self, initial_pose, velocity, trajectory_type, total_time):
+    def __init__(self, initial_pose, velocity, initial_uncertainty, trajectory_type, total_time):
         """
         Parameters:
         initial_pose: np.array, shape (3, 1)
             Initial pose of the vehicle [x, y, theta] in world frame.
         velocity: float
             Initial velocity of the vehicle.
+        initial_uncertainty: float
+            Initial uncertainty of the vehicle's pose, in standard deviation.
         trajectory_type: TrajectoryType
             Type of trajectory to follow.
         total_time: float
@@ -67,7 +69,7 @@ class Vehicle:
 
         # Initialize EKF
         mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy(), v_0])
-        Sigma_0 = np.eye(5) * 1e-9
+        Sigma_0 = np.eye(5) * initial_uncertainty**2
         self._Sigma_imu = np.diag(IMU_NOISE_STD.squeeze()**2)
         self._ekf = EKF(mu_0, Sigma_0)
 
@@ -77,7 +79,9 @@ class Vehicle:
                         [np.sin(theta), np.cos(theta)]])
         keyframe_v_0 = rot.T @ v_0.copy()
         keyframe_mu_0 = np.vstack([np.zeros((3,1)), keyframe_v_0])
-        self._keyframe_ekf = EKF(keyframe_mu_0, Sigma_0.copy())
+        keyframe_Sigma_0 = np.eye(5) * 1e-15
+        keyframe_Sigma_0[3:, 3:] = Sigma_0[3:, 3:].copy()
+        self._keyframe_ekf = EKF(keyframe_mu_0, keyframe_Sigma_0)
 
         # Initialize history
         self._mu_hist = [mu_0]
