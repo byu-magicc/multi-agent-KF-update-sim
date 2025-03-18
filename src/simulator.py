@@ -21,7 +21,7 @@ class Simulation:
         TRAJECTORY_TYPE = TrajectoryType.SINE
         self.MAX_KEYFRAME_TIME = 10.0
         self.GPS_TIME = 60.0
-        INITIAL_UNCERTAINTY_STD = 1e-2
+        INITIAL_UNCERTAINTY_STD = 1e-1
 
         # Create vehicles
         self.vehicles = [

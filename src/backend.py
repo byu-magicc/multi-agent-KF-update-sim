@@ -240,14 +240,14 @@ class Backend:
             The name of the vehicle.
 
         Return: (np.ndarray(3,n), np.ndarray(n,3,3))
-            poses and uncertainty
+            poses and uncertainty, in global (not local) frame
         """
 
         # Check the vehicle name exists
         if vehicle not in self.vehicle_pose_ids:
             raise ValueError(f"Vehicle name {vehicle} not found in priors.")
 
-        # Update the graph and return the full trajectory
+        # Update the graph and get full trajectory
         self._update()
         poses = np.array([
             [self.current_estimates.atPose2(i).x(),
@@ -256,10 +256,18 @@ class Backend:
             for i in self.vehicle_pose_ids[vehicle]
         ]).T
 
+        # Get the covariances in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
-        covariances = np.array([
-            marginals.marginalCovariance(i) for i in self.vehicle_pose_ids[vehicle]
-        ])
+        covariances = []
+        for i in self.vehicle_pose_ids[vehicle]:
+            theta = self.current_estimates.atPose2(i).theta()
+            cov = marginals.marginalCovariance(i)
+            rot = np.array([[np.cos(theta), -np.sin(theta), 0],
+                            [np.sin(theta),  np.cos(theta), 0],
+                            [0,              0,             1]])
+            cov = rot @ cov @ rot.T
+            covariances.append(cov)
+        covariances = np.array(covariances)
 
         return poses, covariances
 
