@@ -50,25 +50,25 @@ class Vehicle:
         total_distance = np.linalg.norm(final_position - initial_pose[:2])
         if trajectory_type == TrajectoryType.LINE:
             trajectory = line_trajectory(num_steps,
-                                              initial_pose[:2],
-                                              final_position)
+                                         initial_pose[:2],
+                                         final_position)
         elif trajectory_type == TrajectoryType.ARC:
             trajectory = arc_trajectory(num_steps,
-                                             initial_pose[:2],
-                                             final_position,
-                                             np.deg2rad(15))
+                                        initial_pose[:2],
+                                        final_position,
+                                        np.deg2rad(15))
         else:
             trajectory = sine_trajectory(num_steps,
-                                              initial_pose[:2],
-                                              final_position,
-                                              total_distance / 30,
-                                              3)
+                                         initial_pose[:2],
+                                         final_position,
+                                         total_distance / 30,
+                                         3)
 
         # Generate IMU data
         self._imu_data, v_0 = get_imu_data(trajectory, IMU_NOISE_STD, self._DT)
 
         # Initialize EKF
-        mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy(), v_0])
+        mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy() + np.random.normal(0, initial_uncertainty, (3, 1)), v_0])
         Sigma_0 = np.eye(5) * initial_uncertainty**2
         self._Sigma_imu = np.diag(IMU_NOISE_STD.squeeze()**2)
         self._ekf = EKF(mu_0, Sigma_0)
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     velocity = 15
     trajectory_type = TrajectoryType.ARC
 
-    vehicle = Vehicle(initial_pose, velocity, trajectory_type, total_time)
+    vehicle = Vehicle(initial_pose, velocity, 0.5, trajectory_type, total_time)
 
     while vehicle.step() is not None:
         if vehicle.get_current_time() % 120 == 0:

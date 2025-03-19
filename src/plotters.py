@@ -208,6 +208,8 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
     # Covariance only plot
     if sigma_only:
         fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
+        if len(mu_hist.keys()) == 1:
+            axs = np.expand_dims(axs, axis=1)
         column_idx = 0
         for key in mu_hist.keys():
             curr_Sigma = Sigma_hist[key][0][:, :3, :3]
