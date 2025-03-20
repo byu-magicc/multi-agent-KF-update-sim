@@ -1,7 +1,14 @@
-import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
+import os
+import numpy as np
 from typing import List, Dict
+
+# Detect if display backend is avaliable
+if not os.environ.get('DISPLAY'):
+    print('No display found. Using Agg backend for matplotlib.')
+    matplotlib.use('Agg')
 
 
 class Trajectory:
@@ -149,7 +156,13 @@ def plot_overview(trajectories: List[Trajectory] = [],
     plt.axis('equal')
     plt.xlabel('x')
     plt.ylabel('y')
-    plt.show()
+
+    if matplotlib.get_backend() == 'agg':
+        os.makedirs('plots', exist_ok=True)
+        plt.savefig('plots/overview.svg')
+        print('Saved overview.svg to file.')
+    else:
+        plt.show()
 
 
 def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
@@ -244,7 +257,14 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
             column_idx += 1
 
         plt.tight_layout()
-        plt.show()
+
+        if matplotlib.get_backend() == 'agg':
+            os.makedirs('plots', exist_ok=True)
+            plt.savefig('plots/trajectory_error.svg')
+            print('Saved trajectory_error.svg to file.')
+        else:
+            plt.show()
+
         return
 
     # Create full plot
@@ -324,7 +344,13 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
         column_idx += 1
 
     plt.tight_layout()
-    plt.show()
+
+    if matplotlib.get_backend() == 'agg':
+        os.makedirs('plots', exist_ok=True)
+        plt.savefig('plots/trajectory_error.svg')
+        print('Saved trajectory_error.svg to file.')
+    else:
+        plt.show()
 
 
 if __name__ == "__main__":
