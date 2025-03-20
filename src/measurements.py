@@ -17,7 +17,7 @@ def get_imu_data(trajectory, noise_std, dt):
 
     Returns:
     np.array: IMU data at every timestep (minus the last). [[acc_x, acc_y, psi_dot], ...].T
-    np.array: Initial velocity assumed at the first timestep. [[v_x, v_y]].T
+    np.array: Initial forward velocity assumed at the first timestep.
     """
     assert trajectory.shape[0] == 3
     assert trajectory.ndim == 2
@@ -51,7 +51,7 @@ def get_imu_data(trajectory, noise_std, dt):
     a_array = np.hstack(a_array)
     a_array += np.random.normal(0, noise_std, a_array.shape)
 
-    return a_array, v_0
+    return a_array, np.linalg.norm(v_0)
 
 
 if __name__ == "__main__":

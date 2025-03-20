@@ -38,7 +38,7 @@ class Vehicle:
         assert trajectory_type in TrajectoryType
 
         # Constants
-        IMU_FREQUENCY = 200  # Hz
+        IMU_FREQUENCY = 100  # Hz
         IMU_NOISE_STD = np.array([[0.9, 0.9, np.deg2rad(0.13)]]).T  # a_x m/s^2, a_y m/s^2, omega rad/s
         self._DT = 1.0 / IMU_FREQUENCY
 
@@ -65,22 +65,32 @@ class Vehicle:
                                          3)
 
         # Generate IMU data
-        self._imu_data, v_0 = get_imu_data(trajectory, IMU_NOISE_STD, self._DT)
+        self._imu_data, v_b = get_imu_data(trajectory, IMU_NOISE_STD, self._DT)
 
         # Initialize EKF
-        mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy() + np.random.normal(0, initial_uncertainty, (3, 1)), v_0])
+        # Calculate noisy initial estimate
+        mu_0 = trajectory[:, 0].reshape(-1, 1).copy() \
+            + np.random.normal(0, initial_uncertainty, (3, 1))
+        psi = mu_0.item(2)
+        mu_0 = np.vstack([mu_0, np.cos(psi)*v_b, np.sin(psi)*v_b])
+        # Calculate velocity uncertainty in global frame assuming no v_b uncertainty
+        Sigma_temp = np.zeros((3, 3))
+        Sigma_temp[0, 0] = initial_uncertainty**2
+        Jac = np.zeros((3, 3))
+        Jac[0, 0] = 1
+        Jac[1, 0] = -np.sin(psi)*v_b
+        Jac[2, 0] = np.cos(psi)*v_b
+        Sigma_temp = Jac @ Sigma_temp @ Jac.T
+        # Create final objects
         Sigma_0 = np.eye(5) * initial_uncertainty**2
+        Sigma_0[2:, 2:] = Sigma_temp
         self._Sigma_imu = np.diag(IMU_NOISE_STD.squeeze()**2)
         self._ekf = EKF(mu_0, Sigma_0)
 
         # Initialize keyframe EKF
-        theta = mu_0.item(2)
-        rot = np.array([[np.cos(theta), -np.sin(theta)],
-                        [np.sin(theta), np.cos(theta)]])
-        keyframe_v_0 = rot.T @ v_0.copy()
-        keyframe_mu_0 = np.vstack([np.zeros((3,1)), keyframe_v_0])
+        keyframe_mu_0 = np.zeros((5,1))
+        keyframe_mu_0[3] = v_b
         keyframe_Sigma_0 = np.eye(5) * 1e-15
-        keyframe_Sigma_0[3:, 3:] = Sigma_0[3:, 3:].copy()
         self._keyframe_ekf = EKF(keyframe_mu_0, keyframe_Sigma_0)
 
         # Initialize history
