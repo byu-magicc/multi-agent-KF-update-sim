@@ -39,9 +39,13 @@ class Simulation:
         ]
         self.backend = Backend(priors)
 
-    def run(self):
+    def run(self, compress_results=False):
         """
         Runs the entire simulation, from start to finish.
+
+        Parameters:
+        compress_results: bool, optional
+            If True, compresses the results to 1 hz instead of full IMU rate.
 
         Returns:
         mu_hist: list of np.array, shape (num_steps, 5)
@@ -89,6 +93,14 @@ class Simulation:
             keyframe_mu, keyframe_Sigma = self.backend.get_full_trajectory(f"{i}")
             keyframe_mu_hist.append(keyframe_mu)
             keyframe_Sigma_hist.append(keyframe_Sigma)
+
+        # Compress results if specified
+        if compress_results:
+            spacing = int(1 / self.vehicles[0]._DT)
+            for i in range(len(mu_hist)):
+                mu_hist[i] = mu_hist[i][:, 0::spacing]
+                truth_hist[i] = truth_hist[i][:, 0::spacing]
+                Sigma_hist[i] = Sigma_hist[i][0::spacing, :, :]
 
         return mu_hist, truth_hist, Sigma_hist, keyframe_mu_hist, keyframe_Sigma_hist
 

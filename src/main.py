@@ -1,34 +1,35 @@
 #!/usr/bin/env python3
 
 import argparse
+from multiprocessing import Pool, cpu_count
 import numpy as np
 import time
-from multiprocessing import Pool, cpu_count
+from tqdm import tqdm
 
 from plotters import plot_overview, plot_trajectory_error, Trajectory, Covariance
 from simulator import Simulation
 
 
-def run_simulation(_):
-    return Simulation().run()
+def run_simulation(args):
+    thread_id, compress_results = args
+    np.random.seed(thread_id)
+    return Simulation().run(compress_results=compress_results)
 
 
 def main(num_instances: int):
-    # Set random seed for reproducibility, but only if running a single instance
-    # Multiple instances would return the same result if the same seed is used
-    if num_instances == 1:
-        np.random.seed(0)
-
     num_sigma = 2
 
     # Run simulations in parallel on multiple cores
     start_time = time.time()
+    compress_results = num_instances > 100
     with Pool(processes=min(num_instances, cpu_count())) as pool:
-        results = pool.map(run_simulation, range(num_instances))
+        results = []
+        for result in tqdm(pool.imap_unordered(run_simulation, [(i, compress_results) for i in range(num_instances)]), total=num_instances, desc="Simulating"):
+            results.append(result)
     print(f"Elapsed time: {time.time() - start_time:.2f} seconds")
 
     num_vehicles = len(Simulation().vehicles)
-    dt = Simulation().vehicles[0]._DT
+    dt = Simulation().vehicles[0]._DT if not compress_results else 1.0
 
     # Extract data for plotting
     poses = []
