@@ -70,11 +70,11 @@ class Simulation:
                             Odometry(f"{i}", keyframe_mu, np.sqrt(keyframe_Sigma))
                         )
 
-                    ## Apply simulated global measurement
-                    #if vehicle.get_current_step() == self.GPS_STEP:
-                    #    global_meas = vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1)
-                    #    global_meas += np.random.normal([0, 0, 0], [0.5, 0.5, 0]).reshape(-1, 1)
-                    #    vehicle.update(global_meas, np.diag([0.5, 0.5, np.inf])**2)
+                    # Apply simulated global measurement
+                    if vehicle.get_current_step() == self.GPS_STEP:
+                        global_meas = vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
+                        global_meas += np.random.normal([0, 0, 0], [0.5, 0.5, 0.5]).reshape(-1, 1)
+                        vehicle.update(global_meas, np.diag([0.5, 0.5, 0.5])**2)
 
                     vehicle.step()
                     if not vehicle.is_active():

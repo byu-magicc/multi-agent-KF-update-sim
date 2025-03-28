@@ -1,7 +1,7 @@
 from enum import Enum
 import numpy as np
 
-from ekf import EKF
+from ekf import EKF, _g
 from measurements import get_odom_data
 from trajectories import line_trajectory, arc_trajectory, sine_trajectory
 
@@ -57,13 +57,18 @@ class Vehicle:
                                          total_distance / 30,
                                          3)
 
-        # Generate IMU data
-        alphas = np.array([0.25, 0.005, 0.25, 0.05])**2
-        self._odom_data = get_odom_data(trajectory, alphas)
+        # Generate odometry data and a noisy trajectory
+        alphas = np.array([0.05, 0.001, 0.05, 0.01])**2
+        self._odom_data = get_odom_data(trajectory)
+        noisy_odom_data = get_odom_data(trajectory, alphas)
+        noisy_trajectory = [trajectory[:, 0].reshape(-1, 1).copy()
+            + np.random.normal(0, initial_uncertainty, (3, 1))]
+        for odom in noisy_odom_data.T:
+            noisy_trajectory.append(_g(odom, noisy_trajectory[-1]))
+        noisy_trajectory = np.hstack(noisy_trajectory)
 
         # Initialize EKF
-        mu_0 = trajectory[:, 0].reshape(-1, 1).copy() \
-            + np.random.normal(0, initial_uncertainty, (3, 1))
+        mu_0 = trajectory[:, 0].reshape(-1, 1).copy()
         Sigma_0 = np.eye(3) * initial_uncertainty**2
         self._ekf = EKF(mu_0, Sigma_0, alphas)
 
@@ -74,7 +79,7 @@ class Vehicle:
 
         # Initialize history
         self._mu_hist = [mu_0]
-        self._truth_hist = trajectory
+        self._truth_hist = noisy_trajectory
         self._Sigma_hist = [Sigma_0]
 
         # Other variables

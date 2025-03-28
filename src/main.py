@@ -42,9 +42,9 @@ def main(num_instances: int):
 
         for i in range(num_vehicles):
             poses.append(Trajectory(truth_hist_array[i][:2, :], color="r"))
+            poses.append(Trajectory(mu_hist_array[i][:2, :], color="b"))
 
             if num_instances == 1:
-                poses.append(Trajectory(mu_hist_array[i][:2, :], color="b"))
                 poses.append(Trajectory(keyframe_mu_hist_array[i][:2, :], color="g"))
                 covariances.append(Covariance(Sigma_hist_array[i][-1, :2, :2],
                                               mu_hist_array[i][:2, -1].reshape(-1, 1),
@@ -57,10 +57,9 @@ def main(num_instances: int):
                                                   keyframe_mu[:2].reshape(-1, 1),
                                                   color="g"))
             else:
-                poses.append(Trajectory(mu_hist_array[i][:2, :], color="b", opacity=0.5))
                 if len(covariances) < num_vehicles:
                     covariances.append(Covariance(Sigma_hist_array[i][-1, :2, :2],
-                                                  truth_hist_array[i][:2, -1].reshape(-1, 1),
+                                                  mu_hist_array[i][:2, -1].reshape(-1, 1),
                                                   color="k"))
             if len(mu_hist) < num_vehicles:
                 mu_hist[f'Vehicle {i}'] = [mu_hist_array[i]]

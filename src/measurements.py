@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_odom_data(trajectory, alphas):
+def get_odom_data(trajectory, alphas=None):
     """
     Get simulated odometry from the ground truth states.
 
@@ -13,6 +13,7 @@ def get_odom_data(trajectory, alphas):
     Parameters:
     trajectory (np.array): 3xn Numpy array of full trajectory. [[x, y, psi], ...].T
     alphas (np.array): alpha values for noise, see table 5.6 in Probabilistic Robotics.
+        Default is None, which means no noise is added.
         [a_1, a_2, a_3, a_4]
 
     Returns:
@@ -30,12 +31,15 @@ def get_odom_data(trajectory, alphas):
             + (trajectory[1, t] - trajectory[1, t - 1]) ** 2)
         rot_2 = trajectory[2, t] - trajectory[2, t - 1] - rot_1
 
-        odom = np.zeros((3,1))
-        odom[0] = np.random.normal(rot_1, np.sqrt(alphas[0]*rot_1**2 + alphas[1]*trans**2))
-        odom[1] = np.random.normal(trans, np.sqrt(alphas[2]*trans**2 + alphas[3]*(rot_1**2 + rot_2**2)))
-        odom[2] = np.random.normal(rot_2, np.sqrt(alphas[0]*rot_2**2 + alphas[1]*trans**2))
+        if alphas is not None:
+            odom = np.zeros((3,1))
+            odom[0] = np.random.normal(rot_1, np.sqrt(alphas[0]*rot_1**2 + alphas[1]*trans**2))
+            odom[1] = np.random.normal(trans, np.sqrt(alphas[2]*trans**2 + alphas[3]*(rot_1**2 + rot_2**2)))
+            odom[2] = np.random.normal(rot_2, np.sqrt(alphas[0]*rot_2**2 + alphas[1]*trans**2))
+            odom_measurements.append(odom)
+        else:
+            odom_measurements.append(np.array([rot_1, trans, rot_2]).reshape(-1, 1))
 
-        odom_measurements.append(odom)
     odom_measurements = np.hstack(odom_measurements)
 
     return odom_measurements
