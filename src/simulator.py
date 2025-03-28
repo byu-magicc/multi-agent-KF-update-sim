@@ -11,22 +11,26 @@ class Simulation:
     """
     def __init__(self):
         # Simulation parameters
-        TOTAL_TIME = 120
-        INITIAL_POSES = [
-            np.array([[0], [0], [np.pi / 4]]),
-            np.array([[400], [0], [np.pi / 4]]),
-            np.array([[0], [400], [np.pi / 4]])
+        NUM_STEPS = 1000
+        INITIAL_POSITIONS = [
+            np.array([[0], [0]]),
+            np.array([[400], [0]]),
+            np.array([[0], [400]])
         ]
-        VELOCITY = 15.0
+        FINAL_POSITIONS = [
+            position.copy() + NUM_STEPS
+            for position in INITIAL_POSITIONS
+        ]
         TRAJECTORY_TYPE = TrajectoryType.SINE
-        self.MAX_KEYFRAME_TIME = 10.0
-        self.GPS_TIME = 60.0
+        self.MAX_KEYFRAME_STEP = 100
+        self.GPS_STEP = 500
         INITIAL_UNCERTAINTY_STD = 1e-1
 
         # Create vehicles
         self.vehicles = [
-            Vehicle(pose, VELOCITY, INITIAL_UNCERTAINTY_STD, TRAJECTORY_TYPE, TOTAL_TIME)
-            for pose in INITIAL_POSES
+            Vehicle(initial_position, final_position, NUM_STEPS, INITIAL_UNCERTAINTY_STD,
+                    TRAJECTORY_TYPE)
+            for initial_position, final_position in zip(INITIAL_POSITIONS, FINAL_POSITIONS)
         ]
         self.active_vehicles = [True] * len(self.vehicles)
 
@@ -39,20 +43,16 @@ class Simulation:
         ]
         self.backend = Backend(priors)
 
-    def run(self, compress_results=False):
+    def run(self):
         """
         Runs the entire simulation, from start to finish.
 
-        Parameters:
-        compress_results: bool, optional
-            If True, compresses the results to 1 hz instead of full IMU rate.
-
         Returns:
-        mu_hist: list of np.array, shape (num_steps, 5)
-            List of estimated poses for each vehicle. [x, y, theta, vx, vy]
-        truth_hist: list of np.array, shape (num_steps, 5)
-            List of true poses for each vehicle. [x, y, theta, vx, xy]
-        Sigma_hist: list of np.array, shape (num_steps, 5, 5)
+        mu_hist: list of np.array, shape (num_steps, 3)
+            List of estimated poses for each vehicle. [x, y, theta]
+        truth_hist: list of np.array, shape (num_steps, 3)
+            List of true poses for each vehicle. [x, y, theta]
+        Sigma_hist: list of np.array, shape (num_steps, 3, 3)
             List of covariances for each vehicle's estimates.
         """
 
@@ -61,8 +61,8 @@ class Simulation:
             for i, vehicle in enumerate(self.vehicles):
                 if self.active_vehicles[i]:
                     # Apply simulated keyframe resets
-                    if vehicle.get_current_time() % self.MAX_KEYFRAME_TIME == 0 \
-                            and vehicle.get_current_time() != 0:
+                    if vehicle.get_current_step() % self.MAX_KEYFRAME_STEP == 0 \
+                            and vehicle.get_current_step() != 0:
                         keyframe_mu, keyframe_Sigma = vehicle.keyframe_reset()
                         keyframe_Sigma = np.diag(keyframe_Sigma).reshape(-1, 1)
 
@@ -70,11 +70,11 @@ class Simulation:
                             Odometry(f"{i}", keyframe_mu, np.sqrt(keyframe_Sigma))
                         )
 
-                    # Apply simulated global measurement
-                    if vehicle.get_current_time() == self.GPS_TIME:
-                        global_meas = vehicle._truth_hist[:3, vehicle._current_step].reshape(-1, 1)
-                        global_meas += np.random.normal([0, 0, 0], [0.5, 0.5, 0]).reshape(-1, 1)
-                        vehicle.update(global_meas, np.diag([0.5, 0.5, np.inf])**2)
+                    ## Apply simulated global measurement
+                    #if vehicle.get_current_step() == self.GPS_STEP:
+                    #    global_meas = vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1)
+                    #    global_meas += np.random.normal([0, 0, 0], [0.5, 0.5, 0]).reshape(-1, 1)
+                    #    vehicle.update(global_meas, np.diag([0.5, 0.5, np.inf])**2)
 
                     vehicle.step()
                     if not vehicle.is_active():
@@ -94,25 +94,16 @@ class Simulation:
             keyframe_mu_hist.append(keyframe_mu)
             keyframe_Sigma_hist.append(keyframe_Sigma)
 
-        # Compress results if specified
-        if compress_results:
-            spacing = int(1 / self.vehicles[0]._DT)
-            for i in range(len(mu_hist)):
-                mu_hist[i] = mu_hist[i][:, 0::spacing]
-                truth_hist[i] = truth_hist[i][:, 0::spacing]
-                Sigma_hist[i] = Sigma_hist[i][0::spacing, :, :]
-
         return mu_hist, truth_hist, Sigma_hist, keyframe_mu_hist, keyframe_Sigma_hist
 
 
 if __name__ == "__main__":
     from plotters import plot_trajectory_error, plot_overview, Trajectory, Covariance
 
-    np.random.seed(1)
-
     simulation = Simulation()
 
-    mu_hist_array, truth_hist_array, Sigma_hist_array = simulation.run()
+    mu_hist_array, truth_hist_array, Sigma_hist_array, keyframe_mu_hist, keyframe_Sigma_hist \
+        = simulation.run()
 
     poses = []
     covariances = []
@@ -127,9 +118,9 @@ if __name__ == "__main__":
                            mu_hist_array[i][:2, -1].reshape(-1, 1),
                            color="b"))
 
-        mu_hist[i] = mu_hist_array[i]
-        truth_hist[i] = truth_hist_array[i]
-        Sigma_hist[i] = Sigma_hist_array[i]
+        mu_hist[i] = [mu_hist_array[i]]
+        truth_hist[i] = [truth_hist_array[i]]
+        Sigma_hist[i] = [Sigma_hist_array[i]]
 
     plot_overview(poses, covariances)
     plot_trajectory_error(mu_hist, truth_hist, Sigma_hist)

@@ -3,33 +3,29 @@
 import argparse
 from multiprocessing import Pool, cpu_count
 import numpy as np
-import time
 from tqdm import tqdm
 
 from plotters import plot_overview, plot_trajectory_error, Trajectory, Covariance
 from simulator import Simulation
 
 
-def run_simulation(args):
-    thread_id, compress_results = args
+def run_simulation(thread_id):
     np.random.seed(thread_id)
-    return Simulation().run(compress_results=compress_results)
+    return Simulation().run()
 
 
 def main(num_instances: int):
     num_sigma = 2
 
     # Run simulations in parallel on multiple cores
-    start_time = time.time()
-    compress_results = num_instances > 100
     with Pool(processes=min(num_instances, cpu_count())) as pool:
         results = []
-        for result in tqdm(pool.imap_unordered(run_simulation, [(i, compress_results) for i in range(num_instances)]), total=num_instances, desc="Simulating"):
+        for result in tqdm(pool.imap_unordered(run_simulation,
+                                               [i for i in range(num_instances)]),
+                           total=num_instances, desc="Simulating"):
             results.append(result)
-    print(f"Elapsed time: {time.time() - start_time:.2f} seconds")
 
     num_vehicles = len(Simulation().vehicles)
-    dt = Simulation().vehicles[0]._DT if not compress_results else 1.0
 
     # Extract data for plotting
     poses = []
@@ -81,10 +77,10 @@ def main(num_instances: int):
 
     if num_instances <= 100:
         plot_overview(poses, covariances, num_sigma=num_sigma)
-        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, dt, num_sigma=num_sigma)
+        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=num_sigma)
     else:
         print('Only plotting sigma bounds since instances > 100')
-        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, dt, num_sigma=num_sigma, sigma_only=True)
+        plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, num_sigma=num_sigma, sigma_only=True)
 
 
 if __name__ == "__main__":

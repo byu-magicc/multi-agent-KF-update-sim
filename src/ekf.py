@@ -1,114 +1,75 @@
 import numpy as np
 
 
-def _g(u_t, mu_t_1, dt):
+def _g(u_t, mu_t_1):
     """
-    IMU propagation model. Given the previous state and the current control input,
+    Odometry propagation model. Given the previous state and the current control input,
     return the predicted state.
 
-    x_t = x_t-1 + v_t-1 * dt + 0.5 * R_psi @ a_t * dt^2
-    psi_t = psi_t-1 + omega_t * dt
-    v_t = v_t-1 + R_psi @ a_t * dt
+    x_t = x_t-1 + trans * cos(psi_t-1 + rot_1)
+    y_t = y_t-1 + trans * sin(psi_t-1 + rot_1)
+    psi_t = psi_t-1 + rot_1 + rot_2
 
     Parameters:
     u_t: np.array, shape (3, 1)
-        Control input at time t. Contains the acceleration and angular velocity.
-        [[a_x, a_y, omega]].T
-    mu_t_1: np.array, shape (5, 1)
-        Previous state estimate. Contains the position, orientation, and velocity.
-        [[x, y, psi, v_x, v_y]].T
-    dt: float
-        Time step.
+        Control input at time t.
+        [[rot_1, trans, rot_2]].T
+    mu_t_1: np.array, shape (3, 1)
+        Previous state estimate.
+        [[x, y, psi]].T
 
     Returns:
-    mu_t: np.array, shape (5, 1)
+    mu_t: np.array, shape (3, 1)
         Predicted state estimate.
     """
 
-    a_t = u_t[0:2]
-    omega_t = u_t[2]
+    x_t = mu_t_1.item(0) + u_t.item(1) * np.cos(mu_t_1.item(2) + u_t.item(0))
+    y_t = mu_t_1.item(1) + u_t.item(1) * np.sin(mu_t_1.item(2) + u_t.item(0))
+    psi_t = mu_t_1.item(2) + u_t.item(0) + u_t.item(2)
 
-    p_t_1 = mu_t_1[:2]
-    psi_t_1 = mu_t_1[2]
-    v_t_1 = mu_t_1[3:]
-
-    R_psi = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1)],
-                       [np.sin(psi_t_1), np.cos(psi_t_1)]]).squeeze()
-
-    p_t = p_t_1 + v_t_1 * dt + 0.5 * R_psi @ a_t * dt**2
-    psi_t = psi_t_1 + omega_t * dt
-    v_t = v_t_1 + R_psi @ a_t * dt
-
-    return np.vstack([p_t, psi_t, v_t])
+    return np.array([x_t, y_t, psi_t]).reshape(-1, 1)
 
 
-def _G_mu(u_t, mu_t_1, dt):
+def _G_mu(u_t, mu_t_1):
     """
-    Jacobian of the IMU propagation model with respect to the state.
+    Jacobian of the odometry propagation model with respect to the state.
 
     Parameters:
     u_t: np.array, shape (3, 1)
-        Control input at time t. Contains the acceleration and angular velocity.
-        [[a_x, a_y, omega]].T
-    mu_t_1: np.array, shape (5, 1)
-        State estimate at time t-1. Contains the position, orientation, and velocity.
-        [[x, y, psi, v_x, v_y]].T
-    dt: float
-        Time step.
+        Control input at time t. [[rot_1, trans, rot_2]].T
+    mu_t_1: np.array, shape (3, 1)
+        State estimate at time t-1. [[x, y, psi]].T
 
     Returns:
-    G_mu_t: np.array, shape (5, 5)
+    G_mu_t: np.array, shape (3, 3)
     """
 
-    a_t = u_t[0:2]
-    psi_t_1 = mu_t_1[2]
-
-    R_prime = np.array([[-np.sin(psi_t_1), -np.cos(psi_t_1)],
-                        [np.cos(psi_t_1), -np.sin(psi_t_1)]]).squeeze()
-
-    p_prime_psi = 0.5 * R_prime @ a_t * dt**2
-    v_prime_psi = R_prime @ a_t * dt
-
-    G_mu_t = np.array([[1, 0, p_prime_psi.item(0), dt, 0],
-                       [0, 1, p_prime_psi.item(1), 0, dt],
-                       [0, 0, 1, 0, 0],
-                       [0, 0, v_prime_psi.item(0), 1, 0],
-                       [0, 0, v_prime_psi.item(1), 0, 1]])
+    G_mu_t = np.array([[1, 0, -u_t.item(1) * np.sin(mu_t_1.item(2) + u_t.item(0))],
+                       [0, 1, u_t.item(1) * np.cos(mu_t_1.item(2) + u_t.item(0))],
+                       [0, 0, 1]])
 
     return G_mu_t
 
 
-def _G_u(u_t, mu_t_1, dt):
+def _G_u(u_t, mu_t_1):
     """
-    Jacobian of the IMU propagation model with respect to input.
+    Jacobian of the odometry propagation model with respect to input.
 
     Parameters:
     u_t: np.array, shape (3, 1)
-        Control input at time t. Contains the acceleration and angular velocity.
-        [[a_x, a_y, omega]].T
-    mu_t_1: np.array, shape (5, 1)
-        Current state estimate. Contains the position, orientation, and velocity.
-        [[x, y, psi, v_x, v_y]].T
-    dt: float
-        Time step.
+        Control input at time t. [[rot_1, trans, rot_2]].T
+    mu_t_1: np.array, shape (3, 1)
+        Current state estimate. [[x, y, psi]].T
 
     Returns:
-    G_u_t: np.array, shape (5, 5)
+    G_u_t: np.array, shape (3, 3)
     """
 
-    psi_t_1 = mu_t_1[2]
-
-    R_psi = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1)],
-                      [np.sin(psi_t_1), np.cos(psi_t_1)]]).squeeze()
-
-    p_prime_a = 0.5 * R_psi * dt**2
-    v_prime_a = R_psi * dt
-
-    G_u_t = np.array([[p_prime_a[0, 0], p_prime_a[0, 1], 0],
-                      [p_prime_a[1, 0], p_prime_a[1, 1], 0],
-                      [0, 0, dt],
-                      [v_prime_a[0, 0], v_prime_a[0, 1], 0],
-                      [v_prime_a[1, 0], v_prime_a[1, 1], 0]])
+    G_u_t = np.array([[-u_t.item(1) * np.sin(mu_t_1.item(2) + u_t.item(0)),
+                       np.cos(mu_t_1.item(2) + u_t.item(0)), 0],
+                      [u_t.item(1) * np.cos(mu_t_1.item(2) + u_t.item(0)),
+                       np.sin(mu_t_1.item(2) + u_t.item(0)), 0],
+                      [1, 0, 1]])
 
     return G_u_t
 
@@ -118,16 +79,16 @@ def _h_global(mu_t):
     Global measurement model. Given the current state, return the predicted global pose.
 
     Parameters:
-    mu_t: np.array, shape (5, 1)
+    mu_t: np.array, shape (3, 1)
         Current state estimate. Contains the position, orientation, and velocity.
-        [[x, y, psi, v_x, v_y]].T
+        [[x, y, psi]].T
 
     Returns:
     np.array, shape (3, 1)
         Predicted global pose.
     """
 
-    return mu_t[:3]
+    return mu_t
 
 
 def _H_global(mu_t):
@@ -135,36 +96,38 @@ def _H_global(mu_t):
     Jacobian of the global measurement model with respect to the state.
 
     Parameters:
-    mu_t: np.array, shape (5, 1)
+    mu_t: np.array, shape (3, 1)
         Current state estimate. Contains the position, orientation, and velocity.
-        [[x, y, psi, v_x, v_y]].T
+        [[x, y, psi]].T
 
     Returns:
-    H_global_t: np.array, shape (3, 5)
+    H_global_t: np.array, shape (3, 3)
         Jacobian of the global measurement model.
     """
 
-    return np.eye(3, 5)
+    return np.eye(3, 3)
 
 
 class EKF:
     """
-    Basic EKF class for IMU propagation and global measurements.
+    Basic EKF class for odometry propagation and global measurements.
     """
-    def __init__(self, mu_0, Sigma_0):
+    def __init__(self, mu_0, Sigma_0, alphas):
         """
         Parameters:
-        mu_0: np.array, shape (5, 1)
-            Initial state estimate. Contains the position, orientation, and velocity.
-            [[x, y, psi, v_x, v_y]].T
-        Sigma_0: np.array, shape (5, 5)
+        mu_0: np.array, shape (3, 1)
+            Initial state estimate. Contains the position and orientation.
+            [[x, y, psi]].T
+        Sigma_0: np.array, shape (3, 3)
             Initial covariance matrix.
+        alphas: odometry noise coefficients
         """
-        assert mu_0.shape == (5, 1)
-        assert Sigma_0.shape == (5, 5)
+        assert mu_0.shape == (3, 1)
+        assert Sigma_0.shape == (3, 3)
 
         self.mu = mu_0
         self.Sigma = Sigma_0
+        self.alphas = alphas
 
         self.g = _g
         self.h_global = _h_global
@@ -172,26 +135,30 @@ class EKF:
         self.G_u = _G_u
         self.H_global = _H_global
 
-    def propagate(self, u_t, R, dt):
+
+    def propagate(self, u_t):
         """
         Propagate the state estimate and covariance matrix using the IMU measurement model.
 
         Parameters:
         u_t: np.array, shape (3, 1)
-            Control input at time t. Contains the acceleration and angular velocity.
-            [[a_x, a_y, omega]].T
-        R: np.array, shape (3, 3)
-            Covariance matrix for the IMU measurement uncertainty.
-        dt: float
-            Time step.
+            Control input (odometry) at time t.
+            [[rot_1, trans, rot_2]].T
         """
         assert u_t.shape == (3, 1)
-        assert R.shape == (3, 3)
 
-        G_mu_t = self.G_mu(u_t, self.mu, dt)
-        G_u_t = self.G_u(u_t, self.mu, dt)
+        # Calculate odometry covariance
+        p1 = self.alphas.item(0)*u_t.item(0)**2 + self.alphas.item(1)*u_t.item(1)**2
+        p2 = self.alphas.item(2)*u_t.item(1)**2 + self.alphas.item(3)*u_t.item(0)**2 \
+            + self.alphas.item(3)*u_t.item(2)**2
+        p3 = self.alphas.item(0)*u_t.item(2)**2 + self.alphas.item(1)*u_t.item(1)**2
+        R = np.array([[p1, 0, 0], [0, p2, 0], [0, 0, p3]])
 
-        self.mu = self.g(u_t, self.mu, dt)
+        # Calculate Jacobians
+        G_mu_t = self.G_mu(u_t, self.mu)
+        G_u_t = self.G_u(u_t, self.mu)
+
+        self.mu = self.g(u_t, self.mu)
         self.Sigma = G_mu_t @ self.Sigma @ G_mu_t.T + G_u_t @ R @ G_u_t.T
 
     def update_global(self, z_t, Q):
@@ -211,7 +178,7 @@ class EKF:
 
         K_t = self.Sigma @ H_t.T @ np.linalg.inv(H_t @ self.Sigma @ H_t.T + Q)
         self.mu = self.mu + K_t @ (z_t - self.h_global(self.mu))
-        self.Sigma = (np.eye(5) - K_t @ H_t) @ self.Sigma
+        self.Sigma = (np.eye(3) - K_t @ H_t) @ self.Sigma
 
     def reset_state(self):
         """
@@ -219,68 +186,61 @@ class EKF:
         values before resetting. Useful for keyframe resets.
 
         Returns:
-        current_mu: np.array, shape (5, 1)
+        current_mu: np.array, shape (3, 1)
             Current state estimate before reset.
-        current_Sigma: np.array, shape (5, 5)
+        current_Sigma: np.array, shape (3, 3)
             Current covariance matrix before reset.
         """
-        rot = np.array([[np.cos(self.mu[2]), -np.sin(self.mu[2])],
-                        [np.sin(self.mu[2]), np.cos(self.mu[2])]])
 
         current_mu = self.mu.copy()
         current_Sigma = self.Sigma.copy()
-        self.mu[:3] = 0.0
-        self.mu[3:] = rot.T @ self.mu[3:]
-        self.Sigma = np.eye(5) * 1e-9
-        self.Sigma[3:, 3:] = current_Sigma[3:, 3:].copy()
+        self.mu = np.zeros_like(self.mu)
+        self.Sigma = np.eye(3) * 1e-15
 
-        return current_mu[:3], current_Sigma[:3, :3]
+        return current_mu, current_Sigma
 
 
 if __name__ == "__main__":
-    from measurements import get_imu_data
+    from measurements import get_odom_data
     from plotters import plot_overview, plot_trajectory_error, Trajectory, Covariance
-    from trajectories import sine_trajectory
+    from trajectories import sine_trajectory, line_trajectory
 
 
     np.set_printoptions(linewidth=np.inf)
     np.random.seed(0)
 
-    total_time = 60
-    dt = 1.0 / 200
-    num_steps = int(total_time / dt)
-    imu_noise_std = np.array([[0.5, 0.5, 0.25]]).T
+    num_steps = 100
+    alphas = np.array([1, 1, 1, 1]) * 1e-2**2
 
     trajectory = sine_trajectory(num_steps, np.array([[0, 0]]).T, np.array([[100, 100]]).T, 5, 2)
 
-    imu_data, v_0 = get_imu_data(trajectory, imu_noise_std, dt)
+    odom_data = get_odom_data(trajectory, alphas)
 
-    mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy(), v_0])
-    Sigma_0 = np.eye(5) * 1e-9
+    mu_0 = trajectory[:, 0].reshape(-1, 1).copy()
+    Sigma_0 = np.eye(3) * 1e-15
     Sigma_global = np.diag([0.1, 0.1, 0.05])**2
-    Sigma_imu = np.diag(imu_noise_std.squeeze()**2)
 
     mu_hist = {"Vehicle 1": [mu_0]}
-    truth_hist = {"Vehicle 1": np.pad(trajectory, ((0, 2), (0, 0)), mode='constant', constant_values=0)}
+    truth_hist = {"Vehicle 1": [trajectory]}
     Sigma_hist = {"Vehicle 1": [Sigma_0.copy()]}
 
-    ekf = EKF(mu_0, Sigma_0)
+    ekf = EKF(mu_0, Sigma_0, alphas)
 
     for i in range(num_steps - 1):
-        ekf.propagate(imu_data[:, i].reshape(-1, 1), Sigma_imu, dt)
+        ekf.propagate(odom_data[:, i].reshape(-1, 1))
 
         mu_hist["Vehicle 1"].append(ekf.mu.copy())
         Sigma_hist["Vehicle 1"].append(ekf.Sigma.copy())
 
-        if ((i + 1) * dt) % 20 == 0:
-            global_meas = trajectory[:3, i].reshape(-1, 1)
+        if i % 50 == 0 and i != 0:
+            global_meas = trajectory[:3, i + 1].reshape(-1, 1)
             ekf.update_global(global_meas, Sigma_global)
 
-    mu_hist["Vehicle 1"] = np.hstack(mu_hist["Vehicle 1"])
-    Sigma_hist["Vehicle 1"] = np.array(Sigma_hist["Vehicle 1"])
+    mu_hist["Vehicle 1"] = [np.hstack(mu_hist["Vehicle 1"])]
+    Sigma_hist["Vehicle 1"] = [np.array(Sigma_hist["Vehicle 1"])]
 
     plot_overview(trajectories=[Trajectory(trajectory[:2], name="Truth", color="r"),
-                                Trajectory(mu_hist["Vehicle 1"][:2], name="Estimate", color="b")],
+                                Trajectory(mu_hist["Vehicle 1"][0][:2], name="Estimate", color="b")],
                   covariances=[Covariance(ekf.Sigma[:2, :2], ekf.mu[:2], color="b")])
     plot_trajectory_error(mu_hist, truth_hist, Sigma_hist)
 

@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 
 from ekf import EKF
-from measurements import get_imu_data
+from measurements import get_odom_data
 from trajectories import line_trajectory, arc_trajectory, sine_trajectory
 
 
@@ -20,83 +20,61 @@ class Vehicle:
     Class for single simulation vehicle. Contains it's own sensor and filters and 'dynamics',
     like you would expect an actual vehicle to have.
     """
-    def __init__(self, initial_pose, velocity, initial_uncertainty, trajectory_type, total_time):
+    def __init__(self, initial_position, final_position, num_steps, initial_uncertainty,
+                 trajectory_type):
         """
         Parameters:
-        initial_pose: np.array, shape (3, 1)
-            Initial pose of the vehicle [x, y, theta] in world frame.
-        velocity: float
-            Initial velocity of the vehicle.
+        initial_position: np.array, shape (2, 1)
+            Initial position of the vehicle [x, y] in world frame.
+        final_position: np.array, shape (2, 1)
+            Final position of the vehicle [x, y] in world frame.
+        num_steps: int
+            Number of steps to take to reach final position.
         initial_uncertainty: float
-            Initial uncertainty of the vehicle's pose, in standard deviation.
+            Initial uncertainty of the vehicle's position, in standard deviations.
         trajectory_type: TrajectoryType
             Type of trajectory to follow.
-        total_time: float
-            Total time of the simulation in seconds.
         """
-        assert initial_pose.shape == (3, 1)
+        assert initial_position.shape == (2, 1)
+        assert final_position.shape == (2, 1)
         assert trajectory_type in TrajectoryType
 
-        # Constants
-        IMU_FREQUENCY = 100  # Hz
-        IMU_NOISE_STD = np.array([[0.9, 0.9, np.deg2rad(0.13)]]).T  # a_x m/s^2, a_y m/s^2, omega rad/s
-        self._DT = 1.0 / IMU_FREQUENCY
-
         # Generate trajectory
-        num_steps = int(total_time * IMU_FREQUENCY)
-        final_position = np.array([[
-            initial_pose.item(0) + velocity * total_time * np.cos(initial_pose.item(2)),
-            initial_pose.item(1) + velocity * total_time * np.sin(initial_pose.item(2))]]).T
-        total_distance = np.linalg.norm(final_position - initial_pose[:2])
         if trajectory_type == TrajectoryType.LINE:
             trajectory = line_trajectory(num_steps,
-                                         initial_pose[:2],
+                                         initial_position,
                                          final_position)
         elif trajectory_type == TrajectoryType.ARC:
             trajectory = arc_trajectory(num_steps,
-                                        initial_pose[:2],
+                                        initial_position,
                                         final_position,
                                         np.deg2rad(15))
         else:
+            total_distance = np.linalg.norm(final_position - initial_position)
             trajectory = sine_trajectory(num_steps,
-                                         initial_pose[:2],
+                                         initial_position,
                                          final_position,
                                          total_distance / 30,
                                          3)
 
         # Generate IMU data
-        self._imu_data, v_b = get_imu_data(trajectory, IMU_NOISE_STD, self._DT)
+        alphas = np.array([0.25, 0.005, 0.25, 0.05])**2
+        self._odom_data = get_odom_data(trajectory, alphas)
 
         # Initialize EKF
-        # Calculate noisy initial estimate
         mu_0 = trajectory[:, 0].reshape(-1, 1).copy() \
             + np.random.normal(0, initial_uncertainty, (3, 1))
-        psi = mu_0.item(2)
-        mu_0 = np.vstack([mu_0, np.cos(psi)*v_b, np.sin(psi)*v_b])
-        # Calculate velocity uncertainty in global frame assuming no v_b uncertainty
-        Sigma_temp = np.zeros((3, 3))
-        Sigma_temp[0, 0] = initial_uncertainty**2
-        Jac = np.zeros((3, 3))
-        Jac[0, 0] = 1
-        Jac[1, 0] = -np.sin(psi)*v_b
-        Jac[2, 0] = np.cos(psi)*v_b
-        Sigma_temp = Jac @ Sigma_temp @ Jac.T
-        # Create final objects
-        Sigma_0 = np.eye(5) * initial_uncertainty**2
-        Sigma_0[2:, 2:] = Sigma_temp
-        self._Sigma_imu = np.diag(IMU_NOISE_STD.squeeze()**2)
-        self._ekf = EKF(mu_0, Sigma_0)
+        Sigma_0 = np.eye(3) * initial_uncertainty**2
+        self._ekf = EKF(mu_0, Sigma_0, alphas)
 
         # Initialize keyframe EKF
-        keyframe_mu_0 = np.zeros((5,1))
-        keyframe_mu_0[3] = v_b
-        keyframe_Sigma_0 = np.eye(5) * 1e-15
-        self._keyframe_ekf = EKF(keyframe_mu_0, keyframe_Sigma_0)
+        keyframe_mu_0 = np.zeros((3,1))
+        keyframe_Sigma_0 = np.eye(3) * 1e-15
+        self._keyframe_ekf = EKF(keyframe_mu_0, keyframe_Sigma_0, alphas)
 
         # Initialize history
         self._mu_hist = [mu_0]
-        # TODO: Add velocity to truth_hist (also update plotter)
-        self._truth_hist = np.pad(trajectory, ((0, 2), (0, 0)), mode='constant', constant_values=0)
+        self._truth_hist = trajectory
         self._Sigma_hist = [Sigma_0]
 
         # Other variables
@@ -107,18 +85,16 @@ class Vehicle:
         Increment the vehicle's simulation by one timestep.
 
         Returns:
-        mu: np.array, shape (5, 1)
-            Current state estimate. [x, y, theta, v_x, v_y]
-        Sigma: np.array, shape (5, 5)
+        mu: np.array, shape (3, 1)
+            Current state estimate. [x, y, theta]
+        Sigma: np.array, shape (3, 3)
             Current state covariance.
         """
-        if self._current_step >= self._imu_data.shape[1]:
+        if self._current_step >= self._odom_data.shape[1]:
             return None
 
-        self._ekf.propagate(self._imu_data[:, self._current_step].reshape(-1, 1),
-                            self._Sigma_imu, self._DT)
-        self._keyframe_ekf.propagate(self._imu_data[:, self._current_step].reshape(-1, 1),
-                                     self._Sigma_imu, self._DT)
+        self._ekf.propagate(self._odom_data[:, self._current_step].reshape(-1, 1))
+        self._keyframe_ekf.propagate(self._odom_data[:, self._current_step].reshape(-1, 1))
         self._current_step += 1
 
         self._mu_hist.append(self._ekf.mu.copy())
@@ -137,9 +113,9 @@ class Vehicle:
             Covariance of the global measurement.
 
         Returns:
-        mu: np.array, shape (5, 1)
-            Updated state estimate. [x, y, theta, v_x, v_y]
-        Sigma: np.array, shape (5, 5)
+        mu: np.array, shape (3, 1)
+            Updated state estimate. [x, y, theta]
+        Sigma: np.array, shape (3, 3)
             Updated state covariance.
         """
         assert z_t.shape == (3, 1)
@@ -154,26 +130,26 @@ class Vehicle:
         Get the estimate, truth and covariance history of the vehicle.
 
         Returns:
-        mu_hist: np.array, shape (5, current_step)
+        mu_hist: np.array, shape (3, current_step)
             History of state estimates.
-        truth_hist: np.array, shape (5, current_step)
+        truth_hist: np.array, shape (3, current_step)
             History of true states.
-        Sigma_hist: np.array, shape (current_step, 5, 5)
+        Sigma_hist: np.array, shape (current_step, 3, 3)
             History of state covariances.
         """
         return np.hstack(self._mu_hist), \
             self._truth_hist[:, :(self._current_step + 1)], \
             np.array(self._Sigma_hist)
 
-    def get_current_time(self):
+    def get_current_step(self):
         """
-        Get the current time of the simulation.
+        Get the current timestep of the simulation.
 
         Returns:
-        float
-            Current time in seconds.
+        int
+            Current timestep
         """
-        return self._current_step * self._DT
+        return self._current_step
 
     def is_active(self):
         """
@@ -183,7 +159,7 @@ class Vehicle:
         bool
             True if vehicle is not at end of trajectory, false otherwise.
         """
-        return self._current_step < self._imu_data.shape[1]
+        return self._current_step < self._odom_data.shape[1]
 
     def keyframe_reset(self):
         """
@@ -195,26 +171,29 @@ class Vehicle:
 if __name__ == "__main__":
     from plotters import plot_trajectory_error, plot_overview, Trajectory, Covariance
 
-    np.set_printoptions(linewidth=np.inf)
-    np.random.seed(1)
-
-    total_time = 60
-    initial_pose = np.array([[0, 0, np.deg2rad(45)]]).T
-    velocity = 15
+    num_steps = 120
+    initial_position = np.array([[0, 0]]).T
+    final_position = np.array([[100, 100]]).T
     trajectory_type = TrajectoryType.ARC
+    initial_uncertainty = 1e-3
+    global_uncertainty = np.array([0.5, 0.5, 1e15]).reshape(-1, 1)
 
-    vehicle = Vehicle(initial_pose, velocity, 0.5, trajectory_type, total_time)
+    vehicle = Vehicle(initial_position, final_position, num_steps, initial_uncertainty,
+                      trajectory_type)
 
     while vehicle.step() is not None:
-        if vehicle.get_current_time() % 120 == 0:
-            global_meas = vehicle._truth_hist[:3, vehicle._current_step].reshape(-1, 1)
-            vehicle.update(global_meas, np.diag([0.5, 0.5, np.inf])**2)
+        if vehicle.get_current_step() % 60 == 0 and vehicle.get_current_step() != 0:
+            global_meas = vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
+            global_meas += np.random.normal(0, global_uncertainty)
+            vehicle.update(global_meas, np.diag(global_uncertainty.flatten())**2)
 
     mu_hist, truth_hist, Sigma_hist = vehicle.get_history()
 
     plot_overview(trajectories=[Trajectory(truth_hist[:2], name="Truth", color='r'),
                                 Trajectory(mu_hist[:2], name="Estimate", color='b')],
-                  covariances=[Covariance(vehicle._ekf.Sigma[:2, :2], vehicle._ekf.mu[:2], color="b")]
+                  covariances=[Covariance(vehicle._ekf.Sigma[:2, :2], vehicle._ekf.mu[:2],
+                                          color="b")]
     )
-    plot_trajectory_error({"Vehicle 1": mu_hist}, {"Vehicle 1": truth_hist}, {"Vehicle 1": Sigma_hist})
+    plot_trajectory_error({"Vehicle 1": [mu_hist]}, {"Vehicle 1": [truth_hist]},
+                          {"Vehicle 1": [Sigma_hist]})
 

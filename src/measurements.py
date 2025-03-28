@@ -1,93 +1,77 @@
 import numpy as np
 
 
-def get_imu_data(trajectory, noise_std, dt):
+def get_odom_data(trajectory, alphas):
     """
-    Get simulated IMU data from the ground truth states.
+    Get simulated odometry from the ground truth states.
 
-    x_t = x_t-1 + v_t-1 * dt + 0.5 * a_t-1 * dt^2
-    a_t = 2 * (x_t+1 - x_t - v_t * dt) / dt^2
-    v_t = v_t-1 + a_t-1 * dt
-    psi_dot_t = (psi_t+1 - psi_t) / dt
+    Uses rotate, translate, rotate odometry, based on section 5.4 in Probabilistic Robotics.
+    rot_1 = arctan2(y_t - y_t_1, x_t - x_t_1) - psi_t_1
+    trans = sqrt((x_t - x_t_1)^2 + (y_t - y_t_1)^2)
+    rot_2 = psi_t - psi_t_1 - rot_1
 
     Parameters:
     trajectory (np.array): 3xn Numpy array of full trajectory. [[x, y, psi], ...].T
-    noise_std (np.array): Standard deviation of the noise for the IMU data. [[acc_x, acc_y, psi_dot]].T
-    dt (float): Delta time step.
+    alphas (np.array): alpha values for noise, see table 5.6 in Probabilistic Robotics.
+        [a_1, a_2, a_3, a_4]
 
     Returns:
-    np.array: IMU data at every timestep (minus the last). [[acc_x, acc_y, psi_dot], ...].T
-    np.array: Initial forward velocity assumed at the first timestep.
+    np.array: Odometry data at every timestep (excluding the first). [[rot_1, trans, rot_2], ...].T
     """
     assert trajectory.shape[0] == 3
     assert trajectory.ndim == 2
     assert trajectory.shape[1] > 1
-    assert noise_std.shape == (3, 1)
-    assert dt > 0
 
-    # Initialize the array with zero acceleration in first time step
-    v_0 = ((trajectory[:2, 1] - trajectory[:2, 0]) / dt).reshape(-1, 1)
-    psi_dot_0 = (trajectory[2, 1] - trajectory[2, 0]) / dt
-    v_t = v_0.copy()
-    a_array = [np.array([[0, 0, psi_dot_0]], dtype=float).T]
+    odom_measurements = []
+    for t in range(1, trajectory.shape[1]):
+        rot_1 = np.arctan2(trajectory[1, t] - trajectory[1, t - 1],
+                           trajectory[0, t] - trajectory[0, t - 1]) - trajectory[2, t - 1]
+        trans = np.sqrt((trajectory[0, t] - trajectory[0, t - 1]) ** 2 \
+            + (trajectory[1, t] - trajectory[1, t - 1]) ** 2)
+        rot_2 = trajectory[2, t] - trajectory[2, t - 1] - rot_1
 
-    for t in range(2, trajectory.shape[1]):
-        x_t1 = trajectory[:, t].reshape(-1, 1)
-        x_t = trajectory[:, t - 1].reshape(-1, 1)
+        odom = np.zeros((3,1))
+        odom[0] = np.random.normal(rot_1, np.sqrt(alphas[0]*rot_1**2 + alphas[1]*trans**2))
+        odom[1] = np.random.normal(trans, np.sqrt(alphas[2]*trans**2 + alphas[3]*(rot_1**2 + rot_2**2)))
+        odom[2] = np.random.normal(rot_2, np.sqrt(alphas[0]*rot_2**2 + alphas[1]*trans**2))
 
-        # Calculate the acceleration in the global frame
-        psi_dot = (x_t1[2] - x_t[2]) / dt
-        a_t_global = 2 * (x_t1[:2] - x_t[:2] - v_t * dt) / dt ** 2
-        # Timestep here
-        v_t += a_t_global[:2] * dt
+        odom_measurements.append(odom)
+    odom_measurements = np.hstack(odom_measurements)
 
-        # Rotate the acceleration to the body frame
-        rot = np.array([[np.cos(x_t[2]), -np.sin(x_t[2])], [np.sin(x_t[2]), np.cos(x_t[2])]]).squeeze()
-        a_t_body = rot.T @ a_t_global
-
-        a_array.append(np.array([a_t_body[0], a_t_body[1], psi_dot]))
-
-    # Add noise
-    a_array = np.hstack(a_array)
-    a_array += np.random.normal(0, noise_std, a_array.shape)
-
-    return a_array, np.linalg.norm(v_0)
+    return odom_measurements
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    from plotters import plot_overview
+    from plotters import plot_overview, Trajectory
     from trajectories import line_trajectory, arc_trajectory, sine_trajectory
 
-    time = 60
-    dt = 1.0 / 400
-    num_steps = int(time / dt)
-    noise_std = np.array([[0., 0., 0.]]).T
+    num_steps = 100
+    alphas = np.array([0.25, 0.005, 0.25, 0.05])**2
 
     x = np.array([[0, 0]], dtype=float).T
 
     trajectory = line_trajectory(num_steps, x, np.array([[10, 10]]).T)
     trajectory = arc_trajectory(num_steps, x, np.array([[10, 0]]).T, 10)
     trajectory = sine_trajectory(num_steps, x, np.array([[100, 100]]).T, 5, 2)
-    imu_data, v = get_imu_data(trajectory, noise_std, dt)
+    odom_data = get_odom_data(trajectory, alphas)
 
     x_traj = [trajectory[:, 0].reshape(-1, 1).copy()]
     x = trajectory[:, 0].reshape(-1, 1).copy()
 
     for i in range(num_steps - 1):
-        rot = np.array([[np.cos(x[2]), -np.sin(x[2])], [np.sin(x[2]), np.cos(x[2])]]).squeeze()
 
-        x[:2] += v * dt + 0.5 * rot @ imu_data[:2, i].reshape(-1, 1) * dt ** 2
-        x[2] += imu_data[2, i] * dt
-        v += rot @ imu_data[:2, i].reshape(-1, 1) * dt
+        x[0] += odom_data[1, i] * np.cos(x[2] + odom_data[0, i])
+        x[1] += odom_data[1, i] * np.sin(x[2] + odom_data[0, i])
+        x[2] += odom_data[0, i] + odom_data[2, i]
 
         x_traj.append(x.copy())
 
-        print(f"Step {i}: x = {x.T}, v = {v.T}, imu = {imu_data[:, i]}")
+        print(f"Step {i}: x = {x.T}, odom = {odom_data[:, i]}")
 
     x_traj = np.hstack(x_traj)
 
-    plot_overview([[trajectory[:2], "Truth", "r"], [x_traj[:2], "Estimate", "b"]])
+    plot_overview([Trajectory(trajectory[:2], "Truth", "r"), Trajectory(x_traj[:2], "Estimate", "b")])
 
     error = x_traj[:2] - trajectory[:2]
     error_psi = x_traj[2] - trajectory[2]
