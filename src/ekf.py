@@ -195,7 +195,7 @@ class EKF:
         current_mu = self.mu.copy()
         current_Sigma = self.Sigma.copy()
         self.mu = np.zeros_like(self.mu)
-        self.Sigma = np.eye(3) * 1e-15
+        self.Sigma = np.zeros_like(self.Sigma)
 
         return current_mu, current_Sigma
 

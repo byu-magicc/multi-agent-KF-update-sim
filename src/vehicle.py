@@ -74,7 +74,7 @@ class Vehicle:
 
         # Initialize keyframe EKF
         keyframe_mu_0 = np.zeros((3,1))
-        keyframe_Sigma_0 = np.eye(3) * 1e-15
+        keyframe_Sigma_0 = np.zeros((3,3))
         self._keyframe_ekf = EKF(keyframe_mu_0, keyframe_Sigma_0, alphas)
 
         # Initialize history
@@ -123,9 +123,6 @@ class Vehicle:
         Sigma: np.array, shape (3, 3)
             Updated state covariance.
         """
-        assert z_t.shape == (3, 1)
-        assert sigma_z.shape == (3, 3)
-
         self._ekf.update_global(z_t, sigma_z)
 
         return self._ekf.mu, self._ekf.Sigma

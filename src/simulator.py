@@ -37,13 +37,12 @@ class Simulation:
         # Create backend
         sigmas = np.full((3, 1), INITIAL_UNCERTAINTY_STD)
         priors = [
-            Prior("0", self.vehicles[0]._ekf.mu[:3], sigmas),
-            Prior("1", self.vehicles[1]._ekf.mu[:3], sigmas),
-            Prior("2", self.vehicles[2]._ekf.mu[:3], sigmas)
+            Prior(f"{i}", self.vehicles[i]._ekf.mu[:3], sigmas)
+            for i in range(len(INITIAL_POSITIONS))
         ]
         self.backend = Backend(priors)
 
-    def run(self):
+    def run(self, compress_results=False):
         """
         Runs the entire simulation, from start to finish.
 
@@ -54,12 +53,16 @@ class Simulation:
             List of true poses for each vehicle. [x, y, theta]
         Sigma_hist: list of np.array, shape (num_steps, 3, 3)
             List of covariances for each vehicle's estimates.
+        compress_results: bool
+            If True, history will be compressed to 100 states.
         """
 
         # Run simulation
         while any(self.active_vehicles):
             for i, vehicle in enumerate(self.vehicles):
                 if self.active_vehicles[i]:
+                    vehicle.step()
+
                     # Apply simulated keyframe resets
                     if vehicle.get_current_step() % self.MAX_KEYFRAME_STEP == 0 \
                             and vehicle.get_current_step() != 0:
@@ -76,7 +79,6 @@ class Simulation:
                         global_meas += np.random.normal([0, 0, 0], [0.5, 0.5, 0.5]).reshape(-1, 1)
                         vehicle.update(global_meas, np.diag([0.5, 0.5, 0.5])**2)
 
-                    vehicle.step()
                     if not vehicle.is_active():
                         self.active_vehicles[i] = False
 
@@ -93,6 +95,12 @@ class Simulation:
             keyframe_mu, keyframe_Sigma = self.backend.get_full_trajectory(f"{i}")
             keyframe_mu_hist.append(keyframe_mu)
             keyframe_Sigma_hist.append(keyframe_Sigma)
+
+        if compress_results:
+            inx = np.linspace(0, mu_hist[0].shape[1] - 1, 100, dtype=int)
+            mu_hist = [mu[:, inx] for mu in mu_hist]
+            truth_hist = [truth[:, inx] for truth in truth_hist]
+            Sigma_hist = [Sigma[inx] for Sigma in Sigma_hist]
 
         return mu_hist, truth_hist, Sigma_hist, keyframe_mu_hist, keyframe_Sigma_hist
 

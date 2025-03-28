@@ -9,20 +9,25 @@ from plotters import plot_overview, plot_trajectory_error, Trajectory, Covarianc
 from simulator import Simulation
 
 
-def run_simulation(thread_id):
+def run_simulation(args):
+    thread_id, compress_results = args
     np.random.seed(thread_id)
-    return Simulation().run()
+    return Simulation().run(compress_results=compress_results)
 
 
 def main(num_instances: int):
     num_sigma = 2
 
     # Run simulations in parallel on multiple cores
+    compress_results = True if num_instances > 100 else False
     with Pool(processes=min(num_instances, cpu_count())) as pool:
         results = []
-        for result in tqdm(pool.imap_unordered(run_simulation,
-                                               [i for i in range(num_instances)]),
-                           total=num_instances, desc="Simulating"):
+        for result in tqdm(
+            pool.imap_unordered(run_simulation,
+                                [(i, compress_results) for i in range(num_instances)]),
+            total=num_instances,
+            desc="Simulating"
+        ):
             results.append(result)
 
     num_vehicles = len(Simulation().vehicles)
