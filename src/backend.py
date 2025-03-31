@@ -9,21 +9,21 @@ class Prior:
     """
     Struct for storing priors.
     """
-    def __init__(self, vehicle: str, mean: np.ndarray, Sigmas: np.ndarray):
+    def __init__(self, vehicle: str, mean: np.ndarray, sigmas: np.ndarray):
         """
         vehicle: str
             The name of the vehicle.
         mean: np.ndarray (3, 1)
             The mean of the prior. x, y, theta.
-        Sigmas: np.ndarray (3, 1)
+        sigmas: np.ndarray (3, 1)
             The standard deviations of the prior.
         """
         assert mean.shape == (3, 1)
-        assert Sigmas.shape == (3, 1)
+        assert sigmas.shape == (3, 1)
 
         self.vehicle = vehicle
         self.mean = mean
-        self.Sigmas = Sigmas
+        self.sigmas = sigmas
 
 
 class Odometry:
@@ -112,7 +112,7 @@ class Backend:
                 gtsam.PriorFactorPose2(
                     self.next_id,
                     gtsam.Pose2(*prior.mean),
-                    gtsam.noiseModel.Diagonal.Sigmas(prior.Sigmas.flatten())
+                    gtsam.noiseModel.Diagonal.Sigmas(prior.sigmas.flatten())
                 )
             )
             self.current_estimates.insert(self.next_id, gtsam.Pose2(*prior.mean))

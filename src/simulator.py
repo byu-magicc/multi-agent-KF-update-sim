@@ -21,7 +21,6 @@ class Simulation:
             for position in INITIAL_POSITIONS
         ]
         TRAJECTORY_TYPE = TrajectoryType.SINE
-        self.MAX_KEYFRAME_STEP = 100
         self.GPS_STEP = 750
         INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1)
         self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, np.deg2rad(15)]).reshape(-1, 1)
@@ -34,9 +33,8 @@ class Simulation:
         self.active_vehicles = [True] * len(self.vehicles)
 
         # Create backend
-        sigmas = np.full((3, 1), INITIAL_UNCERTAINTY_STD)
         priors = [
-            Prior(f"{i}", self.vehicles[i]._ekf.mu[:3], sigmas)
+            Prior(f"{i}", self.vehicles[i]._ekf.mu[:3], INITIAL_UNCERTAINTY_STD)
             for i in range(len(INITIAL_POSITIONS))
         ]
         self.backend = Backend(priors)
@@ -60,17 +58,14 @@ class Simulation:
         while any(self.active_vehicles):
             for i, vehicle in enumerate(self.vehicles):
                 if self.active_vehicles[i]:
+                    # Propagate ekf
                     vehicle.step()
 
-                    # Apply simulated keyframe resets
-                    if vehicle.get_current_step() % self.MAX_KEYFRAME_STEP == 0 \
-                            and vehicle.get_current_step() != 0:
-                        keyframe_mu, keyframe_Sigma = vehicle.keyframe_reset()
-                        keyframe_Sigma = np.diag(keyframe_Sigma).reshape(-1, 1)
-
-                        self.backend.add_odometry(
-                            Odometry(f"{i}", keyframe_mu, np.sqrt(keyframe_Sigma))
-                        )
+                    # Add same odom measurement to backend
+                    odom_meas = vehicle._odom_data[:, vehicle._current_step - 1].reshape(-1, 1)
+                    self.backend.add_odometry(Odometry(f"{i}",
+                                                       odom_meas,
+                                                       self.vehicles[i]._odom_sigmas))
 
                     # Apply simulated global measurement
                     if vehicle.get_current_step() == self.GPS_STEP:
@@ -86,24 +81,26 @@ class Simulation:
         mu_hist = []
         truth_hist = []
         Sigma_hist = []
-        keyframe_mu_hist = []
-        keyframe_Sigma_hist = []
+        backend_mu_hist = []
+        backend_Sigma_hist = []
         for i, vehicle in enumerate(self.vehicles):
             mu, truth, Sigma = vehicle.get_history()
             mu_hist.append(mu)
             truth_hist.append(truth)
             Sigma_hist.append(Sigma)
-            keyframe_mu, keyframe_Sigma = self.backend.get_full_trajectory(f"{i}")
-            keyframe_mu_hist.append(keyframe_mu)
-            keyframe_Sigma_hist.append(keyframe_Sigma)
+            backend_mu, backend_Sigma = self.backend.get_full_trajectory(f"{i}")
+            backend_mu_hist.append(backend_mu)
+            backend_Sigma_hist.append(backend_Sigma)
 
         if compress_results:
             inx = np.linspace(0, mu_hist[0].shape[1] - 1, 100, dtype=int)
             mu_hist = [mu[:, inx] for mu in mu_hist]
             truth_hist = [truth[:, inx] for truth in truth_hist]
             Sigma_hist = [Sigma[inx] for Sigma in Sigma_hist]
+            backend_mu_hist = [mu[:, inx] for mu in backend_mu_hist]
+            backend_Sigma_hist = [Sigma[inx] for Sigma in backend_Sigma_hist]
 
-        return mu_hist, truth_hist, Sigma_hist, keyframe_mu_hist, keyframe_Sigma_hist
+        return mu_hist, truth_hist, Sigma_hist, backend_mu_hist, backend_Sigma_hist
 
 
 if __name__ == "__main__":
@@ -111,7 +108,7 @@ if __name__ == "__main__":
 
     simulation = Simulation()
 
-    mu_hist_array, truth_hist_array, Sigma_hist_array, keyframe_mu_hist, keyframe_Sigma_hist \
+    mu_hist_array, truth_hist_array, Sigma_hist_array, backend_mu_hist, backend_Sigma_hist \
         = simulation.run()
 
     poses = []

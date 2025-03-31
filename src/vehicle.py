@@ -57,18 +57,13 @@ class Vehicle:
                                          3)
 
         # Generate odometry data
-        odom_sigmas = np.array([0.1, 0.1, 0.0025]).reshape(-1, 1)
-        self._odom_data = get_odom_data(trajectory, odom_sigmas)
+        self._odom_sigmas = np.array([0.1, 0.1, 0.0025]).reshape(-1, 1)
+        self._odom_data = get_odom_data(trajectory, self._odom_sigmas)
 
         # Initialize EKF
         mu_0 = trajectory[:, 0].reshape(-1, 1).copy() + np.random.normal(0, initial_sigmas)
         Sigma_0 = np.diag(initial_sigmas.squeeze()**2)
-        self._ekf = EKF(mu_0, Sigma_0, odom_sigmas)
-
-        # Initialize keyframe EKF
-        keyframe_mu_0 = np.zeros((3,1))
-        keyframe_Sigma_0 = np.zeros((3,3))
-        self._keyframe_ekf = EKF(keyframe_mu_0, keyframe_Sigma_0, odom_sigmas)
+        self._ekf = EKF(mu_0, Sigma_0, self._odom_sigmas)
 
         # Initialize history
         self._mu_hist = [mu_0]
@@ -92,7 +87,6 @@ class Vehicle:
             return None
 
         self._ekf.propagate(self._odom_data[:, self._current_step].reshape(-1, 1))
-        #self._keyframe_ekf.propagate(self._odom_data[:, self._current_step].reshape(-1, 1))
         self._current_step += 1
 
         self._mu_hist.append(self._ekf.mu.copy())
@@ -155,12 +149,6 @@ class Vehicle:
             True if vehicle is not at end of trajectory, false otherwise.
         """
         return self._current_step < self._odom_data.shape[1]
-
-    def keyframe_reset(self):
-        """
-        Resets keyframe EKF and returns the keyframe state and covariance prior to the reset.
-        """
-        return self._keyframe_ekf.reset_state()
 
 
 if __name__ == "__main__":
