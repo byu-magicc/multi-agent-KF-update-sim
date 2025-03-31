@@ -209,14 +209,16 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
     alpha = 0.5 if overlay_plots else 1.0
 
     # Calculate population standard deviation
-    calculated_Sigma = {}
-    if overlay_plots:
-        for key in mu_hist.keys():
-            residuals = []
-            for i in range(len(mu_hist[key])):
-                residuals.append((mu_hist[key][i] - truth_hist[key][i])**2)
-            residuals = np.array(residuals)
-            calculated_Sigma[key] = np.sqrt(np.mean(residuals, axis=0))
+    calculated_sigma = {}
+    averaged_sigma = {}
+    for key in mu_hist.keys():
+        residuals = []
+        for i in range(len(mu_hist[key])):
+            residuals.append((mu_hist[key][i] - truth_hist[key][i])**2)
+        residuals = np.array(residuals)
+        calculated_sigma[key] = np.sqrt(np.mean(residuals, axis=0))
+        averaged_sigma[key] = np.sqrt(np.diagonal(np.mean(Sigma_hist[key], axis=0),
+                                                  axis1=1, axis2=2)).T
 
     # Covariance only plot
     if sigma_only:
@@ -225,25 +227,20 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
             axs = np.expand_dims(axs, axis=1)
         column_idx = 0
         for key in mu_hist.keys():
-            curr_Sigma = Sigma_hist[key][0]
-            curr_Sigma = np.hstack([
-                np.sqrt(Sigma.diagonal().reshape(-1, 1)) for Sigma in curr_Sigma
-            ])
-
             # X
-            axs[0, column_idx].plot(curr_Sigma[0, :], label='Estimator Sigma', color='b')
-            axs[0, column_idx].plot(calculated_Sigma[key][0, :], label='Actual Sigma', color='g')
+            axs[0, column_idx].plot(averaged_sigma[key][0, :], label='Estimator Sigma', color='b')
+            axs[0, column_idx].plot(calculated_sigma[key][0, :], label='Actual Sigma', color='g')
             axs[0, column_idx].set_title(key)
             axs[0, column_idx].grid()
 
             # Y
-            axs[1, column_idx].plot(curr_Sigma[1, :], color='b')
-            axs[1, column_idx].plot(calculated_Sigma[key][1, :], color='g')
+            axs[1, column_idx].plot(averaged_sigma[key][1, :], color='b')
+            axs[1, column_idx].plot(calculated_sigma[key][1, :], color='g')
             axs[1, column_idx].grid()
 
             # Psi
-            axs[2, column_idx].plot(curr_Sigma[2, :], color='b')
-            axs[2, column_idx].plot(calculated_Sigma[key][2, :], color='g')
+            axs[2, column_idx].plot(averaged_sigma[key][2, :], color='b')
+            axs[2, column_idx].plot(calculated_sigma[key][2, :], color='g')
             axs[2, column_idx].grid()
 
             # Add ylabels and legend
@@ -276,55 +273,50 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
         for i in range(len(mu_hist[key])):
             curr_mu = mu_hist[key][i]
             curr_truth = truth_hist[key][i]
-            curr_Sigma = Sigma_hist[key][i]
-
-            # Get sigma values for state variables
-            curr_Sigma = np.hstack([
-                np.sqrt(Sigma.diagonal().reshape(-1, 1)) for Sigma in curr_Sigma
-            ])
+            curr_sigma = averaged_sigma[key]
 
             error = curr_mu - curr_truth
 
             # X position
             if i == 0:
                 axs[0, column_idx].plot(error[0, :], label='Error', color='r', alpha=alpha)
-                axs[0, column_idx].plot(num_sigma*curr_Sigma[0, :],
+                axs[0, column_idx].plot(num_sigma*curr_sigma[0, :],
                                         label=f'Estimator {num_sigma} Sigma',
                                         color='b')
-                axs[0, column_idx].plot(-num_sigma*curr_Sigma[0, :], color='b')
+                axs[0, column_idx].plot(-num_sigma*curr_sigma[0, :], color='b')
                 axs[0, column_idx].set_title(f'{key} (timestep)')
                 axs[0, column_idx].grid()
 
                 if overlay_plots:
-                    axs[0, column_idx].plot(num_sigma*calculated_Sigma[key][0, :],
+                    axs[0, column_idx].plot(num_sigma*calculated_sigma[key][0, :],
                                             label=f'Calculated {num_sigma} Sigma', color='g')
-                    axs[0, column_idx].plot(-num_sigma*calculated_Sigma[key][0, :], color='g')
+                    axs[0, column_idx].plot(-num_sigma*calculated_sigma[key][0, :], color='g')
             else:
                 axs[0, column_idx].plot(error[0, :], color='r', alpha=alpha)
 
             # Y position
             axs[1, column_idx].plot(error[1, :], color='r', alpha=alpha)
             if i == 0:
-                axs[1, column_idx].plot(num_sigma*curr_Sigma[1, :], color='b')
-                axs[1, column_idx].plot(-num_sigma*curr_Sigma[1, :], color='b')
+                axs[1, column_idx].plot(num_sigma*curr_sigma[1, :], color='b')
+                axs[1, column_idx].plot(-num_sigma*curr_sigma[1, :], color='b')
                 axs[1, column_idx].grid()
 
                 if overlay_plots:
-                    axs[1, column_idx].plot(num_sigma*calculated_Sigma[key][1, :],
+                    axs[1, column_idx].plot(num_sigma*calculated_sigma[key][1, :],
                                 label=f'Actual {num_sigma} Sigma', color='g')
-                    axs[1, column_idx].plot(-num_sigma*calculated_Sigma[key][1, :], color='g')
+                    axs[1, column_idx].plot(-num_sigma*calculated_sigma[key][1, :], color='g')
 
             # Psi
             axs[2, column_idx].plot(error[2, :], color='r', alpha=alpha)
             if i == 0:
-                axs[2, column_idx].plot(num_sigma*curr_Sigma[2, :], color='b')
-                axs[2, column_idx].plot(-num_sigma*curr_Sigma[2, :], color='b')
+                axs[2, column_idx].plot(num_sigma*curr_sigma[2, :], color='b')
+                axs[2, column_idx].plot(-num_sigma*curr_sigma[2, :], color='b')
                 axs[2, column_idx].grid()
 
                 if overlay_plots:
-                    axs[2, column_idx].plot(num_sigma*calculated_Sigma[key][2, :],
+                    axs[2, column_idx].plot(num_sigma*calculated_sigma[key][2, :],
                     label=f'Actual {num_sigma} Sigma', color='g')
-                    axs[2, column_idx].plot(-num_sigma*calculated_Sigma[key][2, :], color='g')
+                    axs[2, column_idx].plot(-num_sigma*calculated_sigma[key][2, :], color='g')
 
             # Add ylabels and legend
             if column_idx == 0:
