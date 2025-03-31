@@ -11,25 +11,24 @@ class Simulation:
     """
     def __init__(self):
         # Simulation parameters
-        NUM_STEPS = 1000
         INITIAL_POSITIONS = [
             np.array([[0], [0]]),
             np.array([[400], [0]]),
             np.array([[0], [400]])
         ]
         FINAL_POSITIONS = [
-            position.copy() + NUM_STEPS
+            position.copy() + 1000
             for position in INITIAL_POSITIONS
         ]
         TRAJECTORY_TYPE = TrajectoryType.SINE
         self.MAX_KEYFRAME_STEP = 100
-        self.GPS_STEP = 500
-        INITIAL_UNCERTAINTY_STD = 1e-1
+        self.GPS_STEP = 750
+        INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1)
+        self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, np.deg2rad(15)]).reshape(-1, 1)
 
         # Create vehicles
         self.vehicles = [
-            Vehicle(initial_position, final_position, NUM_STEPS, INITIAL_UNCERTAINTY_STD,
-                    TRAJECTORY_TYPE)
+            Vehicle(initial_position, final_position, INITIAL_UNCERTAINTY_STD, TRAJECTORY_TYPE)
             for initial_position, final_position in zip(INITIAL_POSITIONS, FINAL_POSITIONS)
         ]
         self.active_vehicles = [True] * len(self.vehicles)
@@ -75,9 +74,11 @@ class Simulation:
 
                     # Apply simulated global measurement
                     if vehicle.get_current_step() == self.GPS_STEP:
-                        global_meas = vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
-                        global_meas += np.random.normal([0, 0, 0], [0.5, 0.5, 0.5]).reshape(-1, 1)
-                        vehicle.update(global_meas, np.diag([0.5, 0.5, 0.5])**2)
+                        global_meas = \
+                            vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
+                        global_meas += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD)
+                        vehicle.update(global_meas,
+                                       np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2)
 
                     if not vehicle.is_active():
                         self.active_vehicles[i] = False

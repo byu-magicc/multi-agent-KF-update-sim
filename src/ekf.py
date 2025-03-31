@@ -6,14 +6,10 @@ def _g(u_t, mu_t_1):
     Odometry propagation model. Given the previous state and the current control input,
     return the predicted state.
 
-    x_t = x_t-1 + trans * cos(psi_t-1 + rot_1)
-    y_t = y_t-1 + trans * sin(psi_t-1 + rot_1)
-    psi_t = psi_t-1 + rot_1 + rot_2
-
     Parameters:
     u_t: np.array, shape (3, 1)
         Control input at time t.
-        [[rot_1, trans, rot_2]].T
+        [[delta_x, delta_y, delta_psi]].T
     mu_t_1: np.array, shape (3, 1)
         Previous state estimate.
         [[x, y, psi]].T
@@ -23,11 +19,13 @@ def _g(u_t, mu_t_1):
         Predicted state estimate.
     """
 
-    x_t = mu_t_1.item(0) + u_t.item(1) * np.cos(mu_t_1.item(2) + u_t.item(0))
-    y_t = mu_t_1.item(1) + u_t.item(1) * np.sin(mu_t_1.item(2) + u_t.item(0))
-    psi_t = mu_t_1.item(2) + u_t.item(0) + u_t.item(2)
+    psi_t_1 = mu_t_1[2]
+    R = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1)],
+                  [np.sin(psi_t_1), np.cos(psi_t_1)]]).squeeze()
+    xy_t = R @ u_t[:2] + mu_t_1[:2]
+    psi_t = mu_t_1[2] + u_t[2]
 
-    return np.array([x_t, y_t, psi_t]).reshape(-1, 1)
+    return np.vstack([xy_t, psi_t])
 
 
 def _G_mu(u_t, mu_t_1):
@@ -36,7 +34,7 @@ def _G_mu(u_t, mu_t_1):
 
     Parameters:
     u_t: np.array, shape (3, 1)
-        Control input at time t. [[rot_1, trans, rot_2]].T
+        Control input at time t. [[delta_x, delta_y, delta_psi]].T
     mu_t_1: np.array, shape (3, 1)
         State estimate at time t-1. [[x, y, psi]].T
 
@@ -44,8 +42,9 @@ def _G_mu(u_t, mu_t_1):
     G_mu_t: np.array, shape (3, 3)
     """
 
-    G_mu_t = np.array([[1, 0, -u_t.item(1) * np.sin(mu_t_1.item(2) + u_t.item(0))],
-                       [0, 1, u_t.item(1) * np.cos(mu_t_1.item(2) + u_t.item(0))],
+    psi_t_1 = mu_t_1.item(2)
+    G_mu_t = np.array([[1, 0, -u_t.item(0) * np.sin(psi_t_1) - u_t.item(1) * np.cos(psi_t_1)],
+                       [0, 1, u_t.item(0) * np.cos(psi_t_1) - u_t.item(1) * np.sin(psi_t_1)],
                        [0, 0, 1]])
 
     return G_mu_t
@@ -57,19 +56,18 @@ def _G_u(u_t, mu_t_1):
 
     Parameters:
     u_t: np.array, shape (3, 1)
-        Control input at time t. [[rot_1, trans, rot_2]].T
+        Control input at time t. [[delta_x, delta_y, delta_psi]].T
     mu_t_1: np.array, shape (3, 1)
-        Current state estimate. [[x, y, psi]].T
+        State estimate at time t-1. [[x, y, psi]].T
 
     Returns:
     G_u_t: np.array, shape (3, 3)
     """
 
-    G_u_t = np.array([[-u_t.item(1) * np.sin(mu_t_1.item(2) + u_t.item(0)),
-                       np.cos(mu_t_1.item(2) + u_t.item(0)), 0],
-                      [u_t.item(1) * np.cos(mu_t_1.item(2) + u_t.item(0)),
-                       np.sin(mu_t_1.item(2) + u_t.item(0)), 0],
-                      [1, 0, 1]])
+    psi_t_1 = mu_t_1.item(2)
+    G_u_t = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1), 0],
+                      [np.sin(psi_t_1), np.cos(psi_t_1), 0],
+                      [0, 0, 1]])
 
     return G_u_t
 
@@ -112,22 +110,23 @@ class EKF:
     """
     Basic EKF class for odometry propagation and global measurements.
     """
-    def __init__(self, mu_0, Sigma_0, alphas):
+    def __init__(self, mu_0, Sigma_0, odom_sigmas):
         """
         Parameters:
         mu_0: np.array, shape (3, 1)
-            Initial state estimate. Contains the position and orientation.
-            [[x, y, psi]].T
+            Initial state estimate. Contains the position and orientation. [[x, y, psi]].T
         Sigma_0: np.array, shape (3, 3)
             Initial covariance matrix.
-        alphas: odometry noise coefficients
+        odom_sigmas: np.array, shape (3, 1)
+            Standard deviations of the odometry noise. [[sigma_x, sigma_y, sigma_psi]].T
         """
         assert mu_0.shape == (3, 1)
         assert Sigma_0.shape == (3, 3)
+        assert odom_sigmas.shape == (3, 1)
 
         self.mu = mu_0
         self.Sigma = Sigma_0
-        self.alphas = alphas
+        self.R = np.diag(odom_sigmas.flatten()**2)
 
         self.g = _g
         self.h_global = _h_global
@@ -138,28 +137,21 @@ class EKF:
 
     def propagate(self, u_t):
         """
-        Propagate the state estimate and covariance matrix using the IMU measurement model.
+        Propagate the state estimate and covariance matrix.
 
         Parameters:
         u_t: np.array, shape (3, 1)
             Control input (odometry) at time t.
-            [[rot_1, trans, rot_2]].T
+            [[delta_x, delta_y, delta_psi]].T
         """
         assert u_t.shape == (3, 1)
-
-        # Calculate odometry covariance
-        p1 = self.alphas.item(0)*u_t.item(0)**2 + self.alphas.item(1)*u_t.item(1)**2
-        p2 = self.alphas.item(2)*u_t.item(1)**2 + self.alphas.item(3)*u_t.item(0)**2 \
-            + self.alphas.item(3)*u_t.item(2)**2
-        p3 = self.alphas.item(0)*u_t.item(2)**2 + self.alphas.item(1)*u_t.item(1)**2
-        R = np.array([[p1, 0, 0], [0, p2, 0], [0, 0, p3]])
 
         # Calculate Jacobians
         G_mu_t = self.G_mu(u_t, self.mu)
         G_u_t = self.G_u(u_t, self.mu)
 
         self.mu = self.g(u_t, self.mu)
-        self.Sigma = G_mu_t @ self.Sigma @ G_mu_t.T + G_u_t @ R @ G_u_t.T
+        self.Sigma = G_mu_t @ self.Sigma @ G_mu_t.T + G_u_t @ self.R @ G_u_t.T
 
     def update_global(self, z_t, Q):
         """
@@ -210,11 +202,11 @@ if __name__ == "__main__":
     np.random.seed(0)
 
     num_steps = 100
-    alphas = np.array([1, 1, 1, 1]) * 1e-2**2
+    odom_sigmas = np.array([0.1, 0.1, np.deg2rad(1)]).reshape(-1, 1)
 
     trajectory = sine_trajectory(num_steps, np.array([[0, 0]]).T, np.array([[100, 100]]).T, 5, 2)
 
-    odom_data = get_odom_data(trajectory, alphas)
+    odom_data = get_odom_data(trajectory, odom_sigmas)
 
     mu_0 = trajectory[:, 0].reshape(-1, 1).copy()
     Sigma_0 = np.eye(3) * 1e-15
@@ -224,7 +216,7 @@ if __name__ == "__main__":
     truth_hist = {"Vehicle 1": [trajectory]}
     Sigma_hist = {"Vehicle 1": [Sigma_0.copy()]}
 
-    ekf = EKF(mu_0, Sigma_0, alphas)
+    ekf = EKF(mu_0, Sigma_0, odom_sigmas)
 
     for i in range(num_steps - 1):
         ekf.propagate(odom_data[:, i].reshape(-1, 1))

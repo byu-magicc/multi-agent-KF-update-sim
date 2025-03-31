@@ -20,7 +20,7 @@ def main(num_instances: int):
 
     # Run simulations in parallel on multiple cores
     compress_results = True if num_instances > 100 else False
-    with Pool(processes=min(num_instances, cpu_count())) as pool:
+    with Pool(processes=min(num_instances, int(cpu_count() / 2))) as pool:
         results = []
         for result in tqdm(
             pool.imap_unordered(run_simulation,
