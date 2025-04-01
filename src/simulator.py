@@ -74,6 +74,9 @@ class Simulation:
                         global_meas += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD)
                         vehicle.update(global_meas,
                                        np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2)
+                        self.backend.add_global(Global(f"{i}",
+                                                       global_meas,
+                                                       self.GLOBAL_MEASUREMENT_STD))
 
                     if not vehicle.is_active():
                         self.active_vehicles[i] = False
