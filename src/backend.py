@@ -145,12 +145,15 @@ class Backend:
         )
 
         # Add a new estimate to the current estimates
-        estimate = np.array([
-            self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).x(),
-            self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).y(),
-            self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).theta()
-        ]).reshape(-1, 1) + odometry.mean
-        self.current_estimates.insert(self.next_id, gtsam.Pose2(*estimate))
+        x = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).x()
+        y = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).y()
+        theta = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).theta()
+        delta_x = odometry.mean.item(0) * np.cos(theta) - odometry.mean.item(1) * np.sin(theta)
+        delta_y = odometry.mean.item(0) * np.sin(theta) + odometry.mean.item(1) * np.cos(theta)
+        delta_theta = odometry.mean.item(2)
+        self.current_estimates.insert(
+            self.next_id, gtsam.Pose2(x + delta_x, y + delta_y, theta + delta_theta)
+        )
 
         # Add the new pose id to the vehicle's list
         self.vehicle_pose_ids[odometry.vehicle].append(self.next_id)
