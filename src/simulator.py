@@ -39,27 +39,54 @@ class Simulation:
         ]
         self.backend = Backend(priors)
 
-    def run(self, compress_results=False):
+    def run(self, num_steps_in_results=100, compute_backend=False):
         """
         Runs the entire simulation, from start to finish.
 
+        Params:
+        num_steps_in_results: int
+            Number of timesteps to include in results.
+        compute_backend: bool
+            If True, the backend solution is computed at every timestep instead of only when
+            needed.
+
         Returns:
-        mu_hist: list of np.array, shape (num_steps, 3)
-            List of estimated poses for each vehicle. [x, y, theta]
-        truth_hist: list of np.array, shape (num_steps, 3)
-            List of true poses for each vehicle. [x, y, theta]
-        Sigma_hist: list of np.array, shape (num_steps, 3, 3)
-            List of covariances for each vehicle's estimates.
-        compress_results: bool
-            If True, history will be compressed to 100 states.
+        truth_hist: list of np.array, shape (3, num_steps) [[x, y, theta]].T
+            List of true poses for each vehicle at each timestep.
+        ekf_hist_mu: list of np.array, shape (3, num_steps)
+            List of estimated poses for each vehicle from the EKF at each timestep.
+        ekf_hist_Sigma: list of np.array, shape (num_steps, 3, 3)
+            List of covariances for each vehicle from the EKF at each timestep.
+        backend_hist_mu: list of np.array, shape (3, num_steps)
+            List of estimated poses for each vehicle from the backend at each timestep.
+            None if compute_backend is False.
+        backend_hist_Sigma: list of np.array, shape (num_steps, 3, 3)
+            List of covariances for each vehicle from the backend at each timestep.
+            None if compute_backend is False.
         """
 
         # Run simulation
+        truth_hist = [[self.vehicles[i]._truth_hist[:, 0].reshape(-1, 1)]
+                      for i in range(len(self.vehicles))]
+        ekf_hist_mu = [[self.vehicles[i]._ekf.mu.copy()]
+                       for i in range(len(self.vehicles))]
+        ekf_hist_Sigma = [[self.vehicles[i]._ekf.Sigma.copy()]
+                          for i in range(len(self.vehicles))]
+        if compute_backend:
+            backend_hist_mu = [[self.backend.get_vehicle_info(f"{i}")[0].copy()]
+                               for i in range(len(self.vehicles))]
+            backend_hist_Sigma = [[self.backend.get_vehicle_info(f"{i}")[1].copy()]
+                                  for i in range(len(self.vehicles))]
+        else:
+            backend_hist_mu = None
+            backend_hist_Sigma = None
+        hist_indices = np.linspace(0, self.vehicles[0]._odom_data.shape[1],
+                                   num_steps_in_results, dtype=int)
         while any(self.active_vehicles):
             for i, vehicle in enumerate(self.vehicles):
                 if self.active_vehicles[i]:
                     # Propagate ekf
-                    vehicle.step()
+                    curr_ekf_mu, curr_ekf_Sigma = vehicle.step()
 
                     # Add same odom measurement to backend
                     odom_meas = vehicle._odom_data[:, vehicle._current_step - 1].reshape(-1, 1)
@@ -72,38 +99,41 @@ class Simulation:
                         global_meas = \
                             vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
                         global_meas += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD)
-                        vehicle.update(global_meas,
-                                       np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2)
+                        curr_ekf_mu, curr_ekf_Sigma = vehicle.update(
+                            global_meas,
+                            np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2
+                        )
                         self.backend.add_global(Global(f"{i}",
                                                        global_meas,
                                                        self.GLOBAL_MEASUREMENT_STD))
 
+                    # Get hist results
+                    if vehicle.get_current_step() in hist_indices:
+                        truth_hist[i].append(
+                            vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1)
+                        )
+                        ekf_hist_mu[i].append(curr_ekf_mu)
+                        ekf_hist_Sigma[i].append(curr_ekf_Sigma)
+
+                        if compute_backend:
+                            backend_mu, backend_Sigma = self.backend.get_vehicle_info(f"{i}")
+                            backend_hist_mu[i].append(backend_mu)
+                            backend_hist_Sigma[i].append(backend_Sigma)
+
+                    # Stop simulation if completed
                     if not vehicle.is_active():
                         self.active_vehicles[i] = False
 
-        mu_hist = []
-        truth_hist = []
-        Sigma_hist = []
-        backend_mu_hist = []
-        backend_Sigma_hist = []
         for i, vehicle in enumerate(self.vehicles):
-            mu, truth, Sigma = vehicle.get_history()
-            mu_hist.append(mu)
-            truth_hist.append(truth)
-            Sigma_hist.append(Sigma)
-            backend_mu, backend_Sigma = self.backend.get_full_trajectory(f"{i}")
-            backend_mu_hist.append(backend_mu)
-            backend_Sigma_hist.append(backend_Sigma)
+            truth_hist[i] = np.hstack(truth_hist[i])
+            ekf_hist_mu[i] = np.hstack(ekf_hist_mu[i])
+            ekf_hist_Sigma[i] = np.array(ekf_hist_Sigma[i])
 
-        if compress_results:
-            inx = np.linspace(0, mu_hist[0].shape[1] - 1, 100, dtype=int)
-            mu_hist = [mu[:, inx] for mu in mu_hist]
-            truth_hist = [truth[:, inx] for truth in truth_hist]
-            Sigma_hist = [Sigma[inx] for Sigma in Sigma_hist]
-            backend_mu_hist = [mu[:, inx] for mu in backend_mu_hist]
-            backend_Sigma_hist = [Sigma[inx] for Sigma in backend_Sigma_hist]
+            if compute_backend:
+                backend_hist_mu[i] = np.hstack(backend_hist_mu[i])
+                backend_hist_Sigma[i] = np.array(backend_hist_Sigma[i])
 
-        return mu_hist, truth_hist, Sigma_hist, backend_mu_hist, backend_Sigma_hist
+        return truth_hist, ekf_hist_mu, ekf_hist_Sigma, backend_hist_mu, backend_hist_Sigma
 
 
 if __name__ == "__main__":
@@ -111,25 +141,34 @@ if __name__ == "__main__":
 
     simulation = Simulation()
 
-    mu_hist_array, truth_hist_array, Sigma_hist_array, backend_mu_hist, backend_Sigma_hist \
-        = simulation.run()
+    truth_hist_array, ekf_mu_hist_array, ekf_Sigma_hist_array, backend_mu_hist_array, \
+        backend_Sigma_hist_array = simulation.run(compute_backend=True)
 
     poses = []
     covariances = []
 
-    mu_hist = {}
     truth_hist = {}
-    Sigma_hist = {}
+    ekf_mu_hist = {}
+    ekf_Sigma_hist = {}
+    backend_mu_hist = {}
+    backend_Sigma_hist = {}
     for i in range(len(simulation.vehicles)):
-        poses.append(Trajectory(mu_hist_array[i][:2, :], name=f"{i} Estimate", color="b"))
         poses.append(Trajectory(truth_hist_array[i][:2, :], name=f"{i} Truth", color="r"))
-        covariances.append(Covariance(Sigma_hist_array[i][-1, :2, :2],
-                           mu_hist_array[i][:2, -1].reshape(-1, 1),
+        poses.append(Trajectory(ekf_mu_hist_array[i][:2, :], name=f"{i} EKF", color="b"))
+        covariances.append(Covariance(ekf_Sigma_hist_array[i][-1, :2, :2],
+                           ekf_mu_hist_array[i][:2, -1].reshape(-1, 1),
                            color="b"))
+        poses.append(Trajectory(backend_mu_hist_array[i][:2, :], name=f"{i} FG", color="g"))
+        covariances.append(Covariance(backend_Sigma_hist_array[i][-1, :2, :2],
+                           backend_mu_hist_array[i][:2, -1].reshape(-1, 1),
+                           color="g"))
 
-        mu_hist[i] = [mu_hist_array[i]]
         truth_hist[i] = [truth_hist_array[i]]
-        Sigma_hist[i] = [Sigma_hist_array[i]]
+        ekf_mu_hist[i] = [ekf_mu_hist_array[i]]
+        ekf_Sigma_hist[i] = [ekf_Sigma_hist_array[i]]
+        backend_mu_hist[i] = [backend_mu_hist_array[i]]
+        backend_Sigma_hist[i] = [backend_Sigma_hist_array[i]]
 
     plot_overview(poses, covariances)
-    plot_trajectory_error(mu_hist, truth_hist, Sigma_hist)
+    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
+                          backend_Sigma_hist, plot_backend=True)

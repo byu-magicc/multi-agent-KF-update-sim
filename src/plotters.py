@@ -165,9 +165,12 @@ def plot_overview(trajectories: List[Trajectory] = [],
         plt.show()
 
 
-def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
-                          truth_hist: Dict[str, List[np.ndarray]],
-                          Sigma_hist: Dict[str, List[np.ndarray]],
+def plot_trajectory_error(truth_hist: Dict[str, List[np.ndarray]],
+                          ekf_mu_hist: Dict[str, List[np.ndarray]],
+                          ekf_Sigma_hist: Dict[str, List[np.ndarray]],
+                          backend_mu_hist: Dict[str, List[np.ndarray]],
+                          backend_Sigma_hist: Dict[str, List[np.ndarray]],
+                          plot_backend: bool = False,
                           num_sigma: int = 2,
                           sigma_only: bool = False):
     """
@@ -175,15 +178,23 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
     bound.
 
     Parameters:
-    mu_hist: Dictionary of List of np.arrays (3 x n)
-        State estimate for every timestep for any number of iterations, where the key is the
-        vehicle name.
     truth_hist: Dictionary of List of np.arrays (3 x n)
         Ground truth for every timestep for any number of iterations, where the key is the vehicle
         name.
-    Sigma_hist: Dictionary of List of np.arrays (n x 3 x 3)
-        Covariance of estimate for every timestep for any number of iterations, where the key is
+    ekf_mu_hist: Dictionary of List of np.arrays (3 x n)
+        State estimate of the EKF for every timestep for any number of iterations, where the key is
         the vehicle name.
+    ekf_Sigma_hist: Dictionary of List of np.arrays (n x 3 x 3)
+        Covariance of EKF estimate for every timestep for any number of iterations, where the key
+        is the vehicle name.
+    backend_mu_hist: Dictionary of List of np.arrays (3 x n)
+        State estimate of the backend for every timestep for any number of iterations, where the key
+        is the vehicle name. Ignored if plot_backend is False.
+    backend_Sigma_hist: Dictionary of List of np.arrays (n x 3 x 3)
+        Covariance of backend estimate for every timestep for any number of iterations, where the key
+        is the vehicle name. Ignored if plot_backend is False.
+    plot_backend: bool
+        If True, plot the backend estimate as well.
     num_sigma: int
         Number of standard deviations to plot for covariance.
     sigma_only: bool
@@ -191,57 +202,91 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
     """
 
     # Check inputs
-    for key in mu_hist.keys():
-        assert key in truth_hist.keys()
-        assert key in Sigma_hist.keys()
-        assert len(mu_hist[key]) == len(truth_hist[key])
-        assert len(mu_hist[key]) == len(Sigma_hist[key])
+    for key in truth_hist.keys():
+        assert key in ekf_mu_hist.keys()
+        assert key in ekf_Sigma_hist.keys()
+        assert len(truth_hist[key]) == len(ekf_mu_hist[key])
+        assert len(truth_hist[key]) == len(ekf_Sigma_hist[key])
+        if plot_backend:
+            assert key in backend_mu_hist.keys()
+            assert key in backend_Sigma_hist.keys()
+            assert len(truth_hist[key]) == len(backend_mu_hist[key])
+            assert len(truth_hist[key]) == len(backend_Sigma_hist[key])
 
-        for i in range(len(mu_hist[key])):
-            assert mu_hist[key][i].shape[0] == 3
-            assert mu_hist[key][i].ndim == 2
-            assert mu_hist[key][i].shape == truth_hist[key][i].shape
-            assert mu_hist[key][i].shape[1] == Sigma_hist[key][i].shape[0]
-            assert Sigma_hist[key][i].shape[1:] == (3, 3)
+        for i in range(len(truth_hist[key])):
+            assert truth_hist[key][i].shape[0] == 3
+            assert truth_hist[key][i].ndim == 2
+            assert truth_hist[key][i].shape == ekf_mu_hist[key][i].shape
+            assert truth_hist[key][i].shape[1] == ekf_Sigma_hist[key][i].shape[0]
+            assert ekf_Sigma_hist[key][i].shape[1:] == (3, 3)
+            if plot_backend:
+                assert truth_hist[key][i].shape == backend_mu_hist[key][i].shape
+                assert truth_hist[key][i].shape[1] == backend_Sigma_hist[key][i].shape[0]
+                assert backend_Sigma_hist[key][i].shape[1:] == (3, 3)
 
     # Check if we have multiple instances
-    overlay_plots = len(next(iter(mu_hist.values()))) > 1
+    overlay_plots = len(next(iter(ekf_mu_hist.values()))) > 1
     alpha = 0.5 if overlay_plots else 1.0
 
     # Calculate population standard deviation
-    calculated_sigma = {}
-    averaged_sigma = {}
-    for key in mu_hist.keys():
-        residuals = []
-        for i in range(len(mu_hist[key])):
-            residuals.append((mu_hist[key][i] - truth_hist[key][i])**2)
-        residuals = np.array(residuals)
-        calculated_sigma[key] = np.sqrt(np.mean(residuals, axis=0))
-        averaged_sigma[key] = np.sqrt(np.diagonal(np.mean(Sigma_hist[key], axis=0),
-                                                  axis1=1, axis2=2)).T
+    calculated_ekf_sigma = {}
+    averaged_ekf_sigma = {}
+    calculated_backend_sigma = {}
+    averaged_backend_sigma = {}
+    for key in ekf_mu_hist.keys():
+        ekf_residuals = []
+        for i in range(len(ekf_mu_hist[key])):
+            ekf_residuals.append((ekf_mu_hist[key][i] - truth_hist[key][i])**2)
+        ekf_residuals = np.array(ekf_residuals)
+        calculated_ekf_sigma[key] = np.sqrt(np.mean(ekf_residuals, axis=0))
+        averaged_ekf_sigma[key] = np.sqrt(np.diagonal(np.mean(ekf_Sigma_hist[key], axis=0),
+                                                      axis1=1, axis2=2)).T
+
+        if plot_backend:
+            backend_residuals = []
+            for i in range(len(backend_mu_hist[key])):
+                backend_residuals.append((backend_mu_hist[key][i] - truth_hist[key][i])**2)
+            backend_residuals = np.array(backend_residuals)
+            calculated_backend_sigma[key] = np.sqrt(np.mean(backend_residuals, axis=0))
+            averaged_backend_sigma[key] = np.sqrt(np.diagonal(
+                np.mean(backend_Sigma_hist[key], axis=0),
+                axis1=1, axis2=2
+            )).T
 
     # Covariance only plot
     if sigma_only:
-        fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
-        if len(mu_hist.keys()) == 1:
+        fig, axs = plt.subplots(3, len(ekf_mu_hist.keys()), figsize=(16, 12))
+        if len(ekf_mu_hist.keys()) == 1:
             axs = np.expand_dims(axs, axis=1)
         column_idx = 0
-        for key in mu_hist.keys():
+        for key in ekf_mu_hist.keys():
             # X
-            axs[0, column_idx].plot(averaged_sigma[key][0, :], label='Estimator Sigma', color='b')
-            axs[0, column_idx].plot(calculated_sigma[key][0, :], label='Actual Sigma', color='g')
+            axs[0, column_idx].plot(averaged_ekf_sigma[key][0, :], label='EKF Estimated Sigma', color='b')
+            axs[0, column_idx].plot(calculated_ekf_sigma[key][0, :],
+                                    label='EKF Actual Sigma', color='g')
             axs[0, column_idx].set_title(key)
             axs[0, column_idx].grid()
+            if plot_backend:
+                axs[0, column_idx].plot(averaged_backend_sigma[key][0, :],
+                                        label='FG Estimated Sigma', color='c')
+                axs[0, column_idx].plot(calculated_backend_sigma[key][0, :],
+                                        label='FG Actual Sigma', color='m')
 
             # Y
-            axs[1, column_idx].plot(averaged_sigma[key][1, :], color='b')
-            axs[1, column_idx].plot(calculated_sigma[key][1, :], color='g')
+            axs[1, column_idx].plot(averaged_ekf_sigma[key][1, :], color='b')
+            axs[1, column_idx].plot(calculated_ekf_sigma[key][1, :], color='g')
             axs[1, column_idx].grid()
+            if plot_backend:
+                axs[1, column_idx].plot(averaged_backend_sigma[key][1, :], color='c')
+                axs[1, column_idx].plot(calculated_backend_sigma[key][1, :], color='m')
 
             # Psi
-            axs[2, column_idx].plot(averaged_sigma[key][2, :], color='b')
-            axs[2, column_idx].plot(calculated_sigma[key][2, :], color='g')
+            axs[2, column_idx].plot(averaged_ekf_sigma[key][2, :], color='b')
+            axs[2, column_idx].plot(calculated_ekf_sigma[key][2, :], color='g')
             axs[2, column_idx].grid()
+            if plot_backend:
+                axs[2, column_idx].plot(averaged_backend_sigma[key][2, :], color='c')
+                axs[2, column_idx].plot(calculated_backend_sigma[key][2, :], color='m')
 
             # Add ylabels and legend
             if column_idx == 0:
@@ -264,59 +309,69 @@ def plot_trajectory_error(mu_hist: Dict[str, List[np.ndarray]],
         return
 
     # Create full plot
-    fig, axs = plt.subplots(3, len(mu_hist.keys()), figsize=(16, 12))
-    if len(mu_hist.keys()) == 1:
+    fig, axs = plt.subplots(3, len(ekf_mu_hist.keys()), figsize=(16, 12))
+    if len(ekf_mu_hist.keys()) == 1:
         axs = np.expand_dims(axs, axis=1)
 
     column_idx = 0
-    for key in mu_hist.keys():
-        for i in range(len(mu_hist[key])):
-            curr_mu = mu_hist[key][i]
+    for key in ekf_mu_hist.keys():
+        for i in range(len(ekf_mu_hist[key])):
             curr_truth = truth_hist[key][i]
-            curr_sigma = averaged_sigma[key]
-
-            error = curr_mu - curr_truth
+            curr_ekf_mu = ekf_mu_hist[key][i]
+            curr_ekf_sigma = averaged_ekf_sigma[key]
+            ekf_error = curr_ekf_mu - curr_truth
+            if plot_backend:
+                curr_backend_mu = backend_mu_hist[key][i]
+                curr_backend_sigma = averaged_backend_sigma[key]
+                backend_error = curr_backend_mu - curr_truth
 
             # X position
             if i == 0:
-                axs[0, column_idx].plot(error[0, :], label='Error', color='r', alpha=alpha)
-                axs[0, column_idx].plot(num_sigma*curr_sigma[0, :],
-                                        label=f'Estimator {num_sigma} Sigma',
+                axs[0, column_idx].plot(ekf_error[0, :], label='EKF Error', color='r', alpha=alpha)
+                axs[0, column_idx].plot(num_sigma*curr_ekf_sigma[0, :],
+                                        label=f'EKF {num_sigma} Sigma',
                                         color='b')
-                axs[0, column_idx].plot(-num_sigma*curr_sigma[0, :], color='b')
+                axs[0, column_idx].plot(-num_sigma*curr_ekf_sigma[0, :], color='b')
                 axs[0, column_idx].set_title(f'{key} (timestep)')
                 axs[0, column_idx].grid()
 
-                if overlay_plots:
-                    axs[0, column_idx].plot(num_sigma*calculated_sigma[key][0, :],
-                                            label=f'Calculated {num_sigma} Sigma', color='g')
-                    axs[0, column_idx].plot(-num_sigma*calculated_sigma[key][0, :], color='g')
+                if plot_backend:
+                    axs[0, column_idx].plot(backend_error[0, :], label='FG Error',
+                                            color='y', alpha=alpha)
+                    axs[0, column_idx].plot(num_sigma*curr_backend_sigma[0, :],
+                            label=f'FG {num_sigma} Sigma', color='c')
+                    axs[0, column_idx].plot(-num_sigma*curr_backend_sigma[0, :], color='c')
+
             else:
-                axs[0, column_idx].plot(error[0, :], color='r', alpha=alpha)
+                axs[0, column_idx].plot(ekf_error[0, :], color='r', alpha=alpha)
+                if plot_backend:
+                    axs[0, column_idx].plot(backend_error[0, :], color='y', alpha=alpha)
 
             # Y position
-            axs[1, column_idx].plot(error[1, :], color='r', alpha=alpha)
+            axs[1, column_idx].plot(ekf_error[1, :], color='r', alpha=alpha)
+            if plot_backend:
+                axs[1, column_idx].plot(backend_error[1, :], color='y', alpha=alpha)
             if i == 0:
-                axs[1, column_idx].plot(num_sigma*curr_sigma[1, :], color='b')
-                axs[1, column_idx].plot(-num_sigma*curr_sigma[1, :], color='b')
+                axs[1, column_idx].plot(num_sigma*curr_ekf_sigma[1, :], color='b')
+                axs[1, column_idx].plot(-num_sigma*curr_ekf_sigma[1, :], color='b')
                 axs[1, column_idx].grid()
 
-                if overlay_plots:
-                    axs[1, column_idx].plot(num_sigma*calculated_sigma[key][1, :],
-                                label=f'Actual {num_sigma} Sigma', color='g')
-                    axs[1, column_idx].plot(-num_sigma*calculated_sigma[key][1, :], color='g')
+                if plot_backend:
+                    axs[1, column_idx].plot(num_sigma*curr_backend_sigma[1, :], color='c')
+                    axs[1, column_idx].plot(-num_sigma*curr_backend_sigma[1, :], color='c')
 
             # Psi
-            axs[2, column_idx].plot(error[2, :], color='r', alpha=alpha)
+            axs[2, column_idx].plot(ekf_error[2, :], color='r', alpha=alpha)
+            if plot_backend:
+                axs[2, column_idx].plot(backend_error[2, :], color='y', alpha=alpha)
             if i == 0:
-                axs[2, column_idx].plot(num_sigma*curr_sigma[2, :], color='b')
-                axs[2, column_idx].plot(-num_sigma*curr_sigma[2, :], color='b')
+                axs[2, column_idx].plot(num_sigma*curr_ekf_sigma[2, :], color='b')
+                axs[2, column_idx].plot(-num_sigma*curr_ekf_sigma[2, :], color='b')
                 axs[2, column_idx].grid()
 
-                if overlay_plots:
-                    axs[2, column_idx].plot(num_sigma*calculated_sigma[key][2, :],
-                    label=f'Actual {num_sigma} Sigma', color='g')
-                    axs[2, column_idx].plot(-num_sigma*calculated_sigma[key][2, :], color='g')
+                if plot_backend:
+                    axs[2, column_idx].plot(num_sigma*curr_backend_sigma[2, :], color='c')
+                    axs[2, column_idx].plot(-num_sigma*curr_backend_sigma[2, :], color='c')
 
             # Add ylabels and legend
             if column_idx == 0:
@@ -381,15 +436,23 @@ if __name__ == "__main__":
 
     plot_overview(trajectories=poses, lines=lines, markers=markers, covariances=covariances)
 
-    mu_hist = {"Vehicle 1": [np.array([[0, 0, 0], [0.9, 0.9, 0.9]]).T,
-                             np.array([[0, 0, 0], [-0.9, -0.9, -0.9]]).T]}
     truth_hist = {"Vehicle 1": [np.array([[0, 0, 0], [1, 1, 1]]).T,
                                 np.array([[0, 0, 0], [-1, -1, -1]]).T]}
-    Sigma_hist = {"Vehicle 1": [np.array([np.eye(3)*0.1, np.eye(3)*0.2]),
-                                np.array([np.eye(3)*0.1, np.eye(3)*0.2])]}
+    ekf_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0], [0.9, 0.9, 0.9]]).T,
+                                 np.array([[0, 0, 0], [-0.9, -0.9, -0.9]]).T]}
+    ekf_Sigma_hist = {"Vehicle 1": [np.array([np.eye(3)*0.1, np.eye(3)*0.2]),
+                                    np.array([np.eye(3)*0.1, np.eye(3)*0.2])]}
+    backend_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0], [0.85, 0.85, 0.85]]).T,
+                                     np.array([[0, 0, 0], [-0.85, -0.85, -0.85]]).T]}
+    backend_Sigma_hist = {"Vehicle 1": [np.array([np.eye(3)*0.08, np.eye(3)*0.16]),
+                                        np.array([np.eye(3)*0.08, np.eye(3)*0.16])]}
 
-    print(mu_hist, truth_hist, Sigma_hist)
-
-    plot_trajectory_error(mu_hist, truth_hist, Sigma_hist)
-    plot_trajectory_error(mu_hist, truth_hist, Sigma_hist, sigma_only=True)
+    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+                          backend_mu_hist, backend_Sigma_hist)
+    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+                          backend_mu_hist, backend_Sigma_hist, plot_backend=True)
+    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+                          backend_mu_hist, backend_Sigma_hist, sigma_only=True)
+    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+                          backend_mu_hist, backend_Sigma_hist, plot_backend=True, sigma_only=True)
 

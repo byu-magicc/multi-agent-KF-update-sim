@@ -230,8 +230,14 @@ class Backend:
             self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).theta()
         ]).reshape(-1, 1)
 
+        # Get the covariance of the last pose in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
         covariance = marginals.marginalCovariance(self.vehicle_pose_ids[vehicle][-1])
+        theta = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).theta()
+        rot = np.array([[np.cos(theta), -np.sin(theta), 0],
+                        [np.sin(theta),  np.cos(theta), 0],
+                        [0,              0,             1]])
+        covariance = rot @ covariance @ rot.T
 
         return pose, covariance
 
