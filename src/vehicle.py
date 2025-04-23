@@ -48,7 +48,7 @@ class Vehicle:
             trajectory = arc_trajectory(self._total_steps,
                                         initial_position,
                                         final_position,
-                                        np.deg2rad(15))
+                                        np.deg2rad(45))
         else:
             trajectory = sine_trajectory(self._total_steps,
                                          initial_position,

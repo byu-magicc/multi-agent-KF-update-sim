@@ -10,29 +10,29 @@ from simulator import Simulation
 
 
 def run_simulation(args):
-    thread_id, num_steps_in_results, plot_fg_results = args
+    thread_id, num_steps_in_results, plot_fg_results, trajectory_preset = args
     np.random.seed(thread_id)
-    return Simulation().run(num_steps_in_results, plot_fg_results)
+    return Simulation(trajectory_preset).run(num_steps_in_results, plot_fg_results)
 
 
-def main(num_instances: int, plot_fg_results: bool):
+def main(num_instances: int, plot_fg_results: bool, trajectory_preset: int):
     num_sigma = 2
     large_iteration_cutoff = 10
 
     # Run simulations in parallel on multiple cores
-    num_steps_in_results = 25 if plot_fg_results else 100
+    num_steps_in_results = 50 if plot_fg_results else 100
     with Pool(processes=min(num_instances, int(cpu_count() / 2))) as pool:
         results = []
         for result in tqdm(
             pool.imap_unordered(run_simulation,
-                                [(i, num_steps_in_results, plot_fg_results)
+                                [(i, num_steps_in_results, plot_fg_results, trajectory_preset)
                                  for i in range(num_instances)]),
             total=num_instances,
             desc="Simulating"
         ):
             results.append(result)
 
-    num_vehicles = len(Simulation().vehicles)
+    num_vehicles = len(Simulation(0).vehicles)
 
     # Extract data for plotting
     poses = []
@@ -105,6 +105,8 @@ if __name__ == "__main__":
     parser.add_argument('--plot_fg_results', action='store_true',
                         help='Plot consistency results for the factor grath. ' + \
                         'Slows simulation significantly.')
+    parser.add_argument('-t', '--trajectory-preset', type=int, default=0,
+                        help='Trajectory preset to simulate. Valid values are 0-5.')
     args = vars(parser.parse_args())
 
     if args['num_instances'] < 1:

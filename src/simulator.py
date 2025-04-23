@@ -9,23 +9,44 @@ class Simulation:
     Simulation class. Contains everything occuring in a single simulation, but no plotting or
     multi-threading.
     """
-    def __init__(self):
-        # Simulation parameters
-        INITIAL_POSITIONS = [
-            np.array([[0], [0]]),
-            np.array([[400], [0]]),
-            np.array([[0], [400]])
-        ]
-        FINAL_POSITIONS = [
-            position.copy() + 1000
-            for position in INITIAL_POSITIONS
-        ]
-        TRAJECTORY_TYPE = TrajectoryType.SINE
-        self.GPS_STEP = 750
+    def __init__(self, trajectory_preset):
+        # Trajectory type
+        if trajectory_preset in [0, 2, 4]:
+            INITIAL_POSITIONS = [
+                np.array([[0], [0]]),
+                np.array([[0], [500]]),
+            ]
+            FINAL_POSITIONS = [
+                position.copy() + np.array([[2000], [0]])
+                for position in INITIAL_POSITIONS
+            ]
+        elif trajectory_preset in [1, 3, 5]:
+            INITIAL_POSITIONS = [
+                np.array([[350], [0]]),
+                np.array([[0], [350]]),
+            ]
+            FINAL_POSITIONS = [
+                np.array([[2350], [0]]),
+                np.array([[0], [2350]]),
+            ]
+        else:
+            raise ValueError(f'Invalid trajectory {trajectory_preset}. Valid trajectories are 0-5.')
+
+        if trajectory_preset in [0, 1]:
+            TRAJECTORY_TYPE = TrajectoryType.SINE
+        elif trajectory_preset in [2, 3]:
+            TRAJECTORY_TYPE = TrajectoryType.LINE
+        else:
+            TRAJECTORY_TYPE = TrajectoryType.ARC
+
+        # Measurement intervals
+        self.GPS_STEP = 1000
+        self.RANGE_MEASUREMENTS = np.array([[500, 0, 1],
+                                            [1500, 0, 1]], dtype=int)
+
+        # Measurement uncertainty
         INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1)
         self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, np.deg2rad(15)]).reshape(-1, 1)
-        self.RANGE_MEASUREMENTS = np.array([[500, 0, 1],
-                                            [1000, 1, 2]], dtype=int)
         self.RANGE_MEASUREMENT_STD = 1.0
 
         # Create vehicles
@@ -164,7 +185,7 @@ class Simulation:
 if __name__ == "__main__":
     from plotters import plot_trajectory_error, plot_overview, Trajectory, Covariance
 
-    simulation = Simulation()
+    simulation = Simulation(3)
 
     hist_indices, truth_hist_array, ekf_mu_hist_array, ekf_Sigma_hist_array, \
         backend_mu_hist_array, backend_Sigma_hist_array = simulation.run(compute_backend=True)
