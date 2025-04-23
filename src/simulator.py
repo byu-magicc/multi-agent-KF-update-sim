@@ -133,7 +133,8 @@ class Simulation:
                 backend_hist_mu[i] = np.hstack(backend_hist_mu[i])
                 backend_hist_Sigma[i] = np.array(backend_hist_Sigma[i])
 
-        return truth_hist, ekf_hist_mu, ekf_hist_Sigma, backend_hist_mu, backend_hist_Sigma
+        return hist_indices, truth_hist, ekf_hist_mu, ekf_hist_Sigma, \
+            backend_hist_mu, backend_hist_Sigma
 
 
 if __name__ == "__main__":
@@ -141,8 +142,8 @@ if __name__ == "__main__":
 
     simulation = Simulation()
 
-    truth_hist_array, ekf_mu_hist_array, ekf_Sigma_hist_array, backend_mu_hist_array, \
-        backend_Sigma_hist_array = simulation.run(compute_backend=True)
+    hist_indices, truth_hist_array, ekf_mu_hist_array, ekf_Sigma_hist_array, \
+        backend_mu_hist_array, backend_Sigma_hist_array = simulation.run(compute_backend=True)
 
     poses = []
     covariances = []
@@ -170,5 +171,5 @@ if __name__ == "__main__":
         backend_Sigma_hist[i] = [backend_Sigma_hist_array[i]]
 
     plot_overview(poses, covariances)
-    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
+    plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                           backend_Sigma_hist, plot_backend=True)

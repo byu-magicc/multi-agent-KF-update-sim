@@ -165,7 +165,8 @@ def plot_overview(trajectories: List[Trajectory] = [],
         plt.show()
 
 
-def plot_trajectory_error(truth_hist: Dict[str, List[np.ndarray]],
+def plot_trajectory_error(hist_indices: np.ndarray,
+                          truth_hist: Dict[str, List[np.ndarray]],
                           ekf_mu_hist: Dict[str, List[np.ndarray]],
                           ekf_Sigma_hist: Dict[str, List[np.ndarray]],
                           backend_mu_hist: Dict[str, List[np.ndarray]],
@@ -178,6 +179,8 @@ def plot_trajectory_error(truth_hist: Dict[str, List[np.ndarray]],
     bound.
 
     Parameters:
+    hist_indices: np.array of ints (n)
+        Step index of elements in history arrays.
     truth_hist: Dictionary of List of np.arrays (3 x n)
         Ground truth for every timestep for any number of iterations, where the key is the vehicle
         name.
@@ -261,32 +264,32 @@ def plot_trajectory_error(truth_hist: Dict[str, List[np.ndarray]],
         column_idx = 0
         for key in ekf_mu_hist.keys():
             # X
-            axs[0, column_idx].plot(averaged_ekf_sigma[key][0, :], label='EKF Estimated Sigma', color='b')
-            axs[0, column_idx].plot(calculated_ekf_sigma[key][0, :],
+            axs[0, column_idx].plot(hist_indices, averaged_ekf_sigma[key][0, :], label='EKF Estimated Sigma', color='b')
+            axs[0, column_idx].plot(hist_indices, calculated_ekf_sigma[key][0, :],
                                     label='EKF Actual Sigma', color='g')
             axs[0, column_idx].set_title(key)
             axs[0, column_idx].grid()
             if plot_backend:
-                axs[0, column_idx].plot(averaged_backend_sigma[key][0, :],
+                axs[0, column_idx].plot(hist_indices, averaged_backend_sigma[key][0, :],
                                         label='FG Estimated Sigma', color='c')
-                axs[0, column_idx].plot(calculated_backend_sigma[key][0, :],
+                axs[0, column_idx].plot(hist_indices, calculated_backend_sigma[key][0, :],
                                         label='FG Actual Sigma', color='m')
 
             # Y
-            axs[1, column_idx].plot(averaged_ekf_sigma[key][1, :], color='b')
-            axs[1, column_idx].plot(calculated_ekf_sigma[key][1, :], color='g')
+            axs[1, column_idx].plot(hist_indices, averaged_ekf_sigma[key][1, :], color='b')
+            axs[1, column_idx].plot(hist_indices, calculated_ekf_sigma[key][1, :], color='g')
             axs[1, column_idx].grid()
             if plot_backend:
-                axs[1, column_idx].plot(averaged_backend_sigma[key][1, :], color='c')
-                axs[1, column_idx].plot(calculated_backend_sigma[key][1, :], color='m')
+                axs[1, column_idx].plot(hist_indices, averaged_backend_sigma[key][1, :], color='c')
+                axs[1, column_idx].plot(hist_indices, calculated_backend_sigma[key][1, :], color='m')
 
             # Psi
-            axs[2, column_idx].plot(averaged_ekf_sigma[key][2, :], color='b')
-            axs[2, column_idx].plot(calculated_ekf_sigma[key][2, :], color='g')
+            axs[2, column_idx].plot(hist_indices, averaged_ekf_sigma[key][2, :], color='b')
+            axs[2, column_idx].plot(hist_indices, calculated_ekf_sigma[key][2, :], color='g')
             axs[2, column_idx].grid()
             if plot_backend:
-                axs[2, column_idx].plot(averaged_backend_sigma[key][2, :], color='c')
-                axs[2, column_idx].plot(calculated_backend_sigma[key][2, :], color='m')
+                axs[2, column_idx].plot(hist_indices, averaged_backend_sigma[key][2, :], color='c')
+                axs[2, column_idx].plot(hist_indices, calculated_backend_sigma[key][2, :], color='m')
 
             # Add ylabels and legend
             if column_idx == 0:
@@ -327,51 +330,51 @@ def plot_trajectory_error(truth_hist: Dict[str, List[np.ndarray]],
 
             # X position
             if i == 0:
-                axs[0, column_idx].plot(ekf_error[0, :], label='EKF Error', color='r', alpha=alpha)
-                axs[0, column_idx].plot(num_sigma*curr_ekf_sigma[0, :],
+                axs[0, column_idx].plot(hist_indices, ekf_error[0, :], label='EKF Error', color='r', alpha=alpha)
+                axs[0, column_idx].plot(hist_indices, num_sigma*curr_ekf_sigma[0, :],
                                         label=f'EKF {num_sigma} Sigma',
                                         color='b')
-                axs[0, column_idx].plot(-num_sigma*curr_ekf_sigma[0, :], color='b')
+                axs[0, column_idx].plot(hist_indices, -num_sigma*curr_ekf_sigma[0, :], color='b')
                 axs[0, column_idx].set_title(f'{key} (timestep)')
                 axs[0, column_idx].grid()
 
                 if plot_backend:
-                    axs[0, column_idx].plot(backend_error[0, :], label='FG Error',
+                    axs[0, column_idx].plot(hist_indices, backend_error[0, :], label='FG Error',
                                             color='y', alpha=alpha)
-                    axs[0, column_idx].plot(num_sigma*curr_backend_sigma[0, :],
+                    axs[0, column_idx].plot(hist_indices, num_sigma*curr_backend_sigma[0, :],
                             label=f'FG {num_sigma} Sigma', color='c')
-                    axs[0, column_idx].plot(-num_sigma*curr_backend_sigma[0, :], color='c')
+                    axs[0, column_idx].plot(hist_indices, -num_sigma*curr_backend_sigma[0, :], color='c')
 
             else:
-                axs[0, column_idx].plot(ekf_error[0, :], color='r', alpha=alpha)
+                axs[0, column_idx].plot(hist_indices, ekf_error[0, :], color='r', alpha=alpha)
                 if plot_backend:
-                    axs[0, column_idx].plot(backend_error[0, :], color='y', alpha=alpha)
+                    axs[0, column_idx].plot(hist_indices, backend_error[0, :], color='y', alpha=alpha)
 
             # Y position
-            axs[1, column_idx].plot(ekf_error[1, :], color='r', alpha=alpha)
+            axs[1, column_idx].plot(hist_indices, ekf_error[1, :], color='r', alpha=alpha)
             if plot_backend:
-                axs[1, column_idx].plot(backend_error[1, :], color='y', alpha=alpha)
+                axs[1, column_idx].plot(hist_indices, backend_error[1, :], color='y', alpha=alpha)
             if i == 0:
-                axs[1, column_idx].plot(num_sigma*curr_ekf_sigma[1, :], color='b')
-                axs[1, column_idx].plot(-num_sigma*curr_ekf_sigma[1, :], color='b')
+                axs[1, column_idx].plot(hist_indices, num_sigma*curr_ekf_sigma[1, :], color='b')
+                axs[1, column_idx].plot(hist_indices, -num_sigma*curr_ekf_sigma[1, :], color='b')
                 axs[1, column_idx].grid()
 
                 if plot_backend:
-                    axs[1, column_idx].plot(num_sigma*curr_backend_sigma[1, :], color='c')
-                    axs[1, column_idx].plot(-num_sigma*curr_backend_sigma[1, :], color='c')
+                    axs[1, column_idx].plot(hist_indices, num_sigma*curr_backend_sigma[1, :], color='c')
+                    axs[1, column_idx].plot(hist_indices, -num_sigma*curr_backend_sigma[1, :], color='c')
 
             # Psi
-            axs[2, column_idx].plot(ekf_error[2, :], color='r', alpha=alpha)
+            axs[2, column_idx].plot(hist_indices, ekf_error[2, :], color='r', alpha=alpha)
             if plot_backend:
-                axs[2, column_idx].plot(backend_error[2, :], color='y', alpha=alpha)
+                axs[2, column_idx].plot(hist_indices, backend_error[2, :], color='y', alpha=alpha)
             if i == 0:
-                axs[2, column_idx].plot(num_sigma*curr_ekf_sigma[2, :], color='b')
-                axs[2, column_idx].plot(-num_sigma*curr_ekf_sigma[2, :], color='b')
+                axs[2, column_idx].plot(hist_indices, num_sigma*curr_ekf_sigma[2, :], color='b')
+                axs[2, column_idx].plot(hist_indices, -num_sigma*curr_ekf_sigma[2, :], color='b')
                 axs[2, column_idx].grid()
 
                 if plot_backend:
-                    axs[2, column_idx].plot(num_sigma*curr_backend_sigma[2, :], color='c')
-                    axs[2, column_idx].plot(-num_sigma*curr_backend_sigma[2, :], color='c')
+                    axs[2, column_idx].plot(hist_indices, num_sigma*curr_backend_sigma[2, :], color='c')
+                    axs[2, column_idx].plot(hist_indices, -num_sigma*curr_backend_sigma[2, :], color='c')
 
             # Add ylabels and legend
             if column_idx == 0:
@@ -436,6 +439,7 @@ if __name__ == "__main__":
 
     plot_overview(trajectories=poses, lines=lines, markers=markers, covariances=covariances)
 
+    hist_indices = np.array([0, 3])
     truth_hist = {"Vehicle 1": [np.array([[0, 0, 0], [1, 1, 1]]).T,
                                 np.array([[0, 0, 0], [-1, -1, -1]]).T]}
     ekf_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0], [0.9, 0.9, 0.9]]).T,
@@ -447,12 +451,12 @@ if __name__ == "__main__":
     backend_Sigma_hist = {"Vehicle 1": [np.array([np.eye(3)*0.08, np.eye(3)*0.16]),
                                         np.array([np.eye(3)*0.08, np.eye(3)*0.16])]}
 
-    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+    plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist,
                           backend_mu_hist, backend_Sigma_hist)
-    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+    plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist,
                           backend_mu_hist, backend_Sigma_hist, plot_backend=True)
-    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+    plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist,
                           backend_mu_hist, backend_Sigma_hist, sigma_only=True)
-    plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist,
+    plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist,
                           backend_mu_hist, backend_Sigma_hist, plot_backend=True, sigma_only=True)
 

@@ -37,17 +37,18 @@ def main(num_instances: int, plot_fg_results: bool):
     # Extract data for plotting
     poses = []
     covariances = []
+    hist_indices = results[0][0]
     truth_hist = {}
     ekf_mu_hist = {}
     ekf_Sigma_hist = {}
     backend_mu_hist = {}
     backend_Sigma_hist = {}
     for result in results:
-        truth_hist_array = result[0]
-        ekf_hist_mu_array = result[1]
-        ekf_hist_Sigma_array = result[2]
-        backend_hist_mu_array = result[3]
-        backend_hist_Sigma_array = result[4]
+        truth_hist_array = result[1]
+        ekf_hist_mu_array = result[2]
+        ekf_hist_Sigma_array = result[3]
+        backend_hist_mu_array = result[4]
+        backend_hist_Sigma_array = result[5]
 
         for i in range(num_vehicles):
             poses.append(Trajectory(ekf_hist_mu_array[i][:2, :], color="b", opacity=0.5))
@@ -89,11 +90,11 @@ def main(num_instances: int, plot_fg_results: bool):
 
     if num_instances <= large_iteration_cutoff:
         plot_overview(poses, covariances, num_sigma=num_sigma)
-        plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
+        plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                               backend_Sigma_hist, plot_backend=plot_fg_results)
     else:
         print(f'Only plotting sigma bounds since instances > {large_iteration_cutoff}')
-        plot_trajectory_error(truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
+        plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                               backend_Sigma_hist, plot_backend=plot_fg_results, sigma_only=True)
 
 
