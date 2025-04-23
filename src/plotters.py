@@ -286,6 +286,7 @@ def plot_trajectory_error(hist_indices: np.ndarray,
             # Psi
             axs[2, column_idx].plot(hist_indices, averaged_ekf_sigma[key][2, :], color='b')
             axs[2, column_idx].plot(hist_indices, calculated_ekf_sigma[key][2, :], color='g')
+            axs[2, column_idx].set_xlabel('Distance (m)')
             axs[2, column_idx].grid()
             if plot_backend:
                 axs[2, column_idx].plot(hist_indices, averaged_backend_sigma[key][2, :], color='c')
@@ -335,7 +336,7 @@ def plot_trajectory_error(hist_indices: np.ndarray,
                                         label=f'EKF {num_sigma} Sigma',
                                         color='b')
                 axs[0, column_idx].plot(hist_indices, -num_sigma*curr_ekf_sigma[0, :], color='b')
-                axs[0, column_idx].set_title(f'{key} (timestep)')
+                axs[0, column_idx].set_title(f'{key}')
                 axs[0, column_idx].grid()
 
                 if plot_backend:
@@ -370,6 +371,7 @@ def plot_trajectory_error(hist_indices: np.ndarray,
             if i == 0:
                 axs[2, column_idx].plot(hist_indices, num_sigma*curr_ekf_sigma[2, :], color='b')
                 axs[2, column_idx].plot(hist_indices, -num_sigma*curr_ekf_sigma[2, :], color='b')
+                axs[2, column_idx].set_xlabel('Distance (m)')
                 axs[2, column_idx].grid()
 
                 if plot_backend:
