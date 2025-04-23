@@ -24,6 +24,9 @@ class Simulation:
         self.GPS_STEP = 750
         INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1)
         self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, np.deg2rad(15)]).reshape(-1, 1)
+        self.RANGE_MEASUREMENTS = np.array([[500, 0, 1],
+                                            [1000, 1, 2]], dtype=int)
+        self.RANGE_MEASUREMENT_STD = 1.0
 
         # Create vehicles
         self.vehicles = [
@@ -106,6 +109,27 @@ class Simulation:
                         self.backend.add_global(Global(f"{i}",
                                                        global_meas,
                                                        self.GLOBAL_MEASUREMENT_STD))
+
+                    # Apply simulated range measurements
+                    if vehicle.get_current_step() in self.RANGE_MEASUREMENTS[:, 0]:
+                        curr_meas = self.RANGE_MEASUREMENTS[np.where(
+                            self.RANGE_MEASUREMENTS[:, 0] == vehicle.get_current_step()
+                        )].flatten()
+
+                        if i == curr_meas[1]:
+                            vehicle_0 = self.vehicles[curr_meas[1]]
+                            vehicle_1 = self.vehicles[curr_meas[2]]
+                            vehicle_0_position = \
+                                vehicle_0._truth_hist[:2, vehicle_0._current_step].copy()
+                            vehicle_1_position = \
+                                vehicle_1._truth_hist[:2, vehicle_1._current_step].copy()
+                            range_meas = np.linalg.norm(vehicle_0_position - vehicle_1_position)
+                            range_meas += np.random.normal(0, self.RANGE_MEASUREMENT_STD)
+
+                            self.backend.add_range(Range(f"{curr_meas[1]}",
+                                                         f"{curr_meas[2]}",
+                                                         range_meas,
+                                                         self.RANGE_MEASUREMENT_STD))
 
                     # Get hist results
                     if vehicle.get_current_step() in hist_indices:
