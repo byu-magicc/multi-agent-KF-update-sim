@@ -13,11 +13,11 @@ class Simulation:
         # Trajectory type
         if trajectory_preset in [0, 2, 4]:
             INITIAL_POSITIONS = [
-                np.array([[0], [0]]),
-                np.array([[0], [500]]),
+                np.array([[350], [0]]),
+                np.array([[0], [350]]),
             ]
             FINAL_POSITIONS = [
-                position.copy() + np.array([[2000], [0]])
+                position.copy() + np.array([[1414], [1414]])
                 for position in INITIAL_POSITIONS
             ]
         elif trajectory_preset in [1, 3, 5]:
