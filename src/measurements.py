@@ -6,12 +6,12 @@ def get_odom_data(trajectory, odom_sigmas):
     Get simulated odometry from the ground truth states.
 
     Parameters:
-    trajectory (np.array): 3xn Numpy array of full trajectory. [[x, y, psi], ...].T
+    trajectory (np.array): 3xn Numpy array of full trajectory. [[x, y, theta], ...].T
     odom_sigmas (np.array): 3x1 Numpy array of odometry noise standard deviations.
-        [[sigma_x, sigma_y, sigma_psi]].T
+        [[sigma_x, sigma_y, sigma_theta]].T
 
     Returns:
-    np.array: Odometry data at every timestep (excluding the first). [[delta_x, delta_y, delta_psi]], ...].T
+    np.array: Odometry data at every timestep (excluding the first). [[delta_x, delta_y, delta_theta]], ...].T
     """
     assert trajectory.shape[0] == 3
     assert trajectory.ndim == 2
@@ -63,9 +63,9 @@ if __name__ == "__main__":
     plot_overview([Trajectory(trajectory[:2], "Truth", "r"), Trajectory(x_traj[:2], "Estimate", "b")])
 
     error = x_traj[:2] - trajectory[:2]
-    error_psi = x_traj[2] - trajectory[2]
+    error_theta = x_traj[2] - trajectory[2]
     plt.plot(error[0, :], label="x error")
     plt.plot(error[1, :], label="y error")
-    plt.plot(error_psi, label="psi error")
+    plt.plot(error_theta, label="theta error")
     plt.legend()
     plt.show()

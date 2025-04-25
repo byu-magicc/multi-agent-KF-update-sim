@@ -283,7 +283,7 @@ def plot_trajectory_error(hist_indices: np.ndarray,
                 axs[1, column_idx].plot(hist_indices, averaged_backend_sigma[key][1, :], color='c')
                 axs[1, column_idx].plot(hist_indices, calculated_backend_sigma[key][1, :], color='m')
 
-            # Psi
+            # Theta
             axs[2, column_idx].plot(hist_indices, averaged_ekf_sigma[key][2, :], color='b')
             axs[2, column_idx].plot(hist_indices, calculated_ekf_sigma[key][2, :], color='g')
             axs[2, column_idx].set_xlabel('Distance (m)')
@@ -296,7 +296,7 @@ def plot_trajectory_error(hist_indices: np.ndarray,
             if column_idx == 0:
                 axs[0, column_idx].set_ylabel('X Error (m)')
                 axs[1, column_idx].set_ylabel('Y Error (m)')
-                axs[2, column_idx].set_ylabel('Psi Error (rad)')
+                axs[2, column_idx].set_ylabel('Theta Error (rad)')
                 axs[0, column_idx].legend()
 
             column_idx += 1
@@ -364,7 +364,7 @@ def plot_trajectory_error(hist_indices: np.ndarray,
                     axs[1, column_idx].plot(hist_indices, num_sigma*curr_backend_sigma[1, :], color='c')
                     axs[1, column_idx].plot(hist_indices, -num_sigma*curr_backend_sigma[1, :], color='c')
 
-            # Psi
+            # Theta
             axs[2, column_idx].plot(hist_indices, ekf_error[2, :], color='r', alpha=alpha)
             if plot_backend:
                 axs[2, column_idx].plot(hist_indices, backend_error[2, :], color='y', alpha=alpha)
@@ -382,7 +382,7 @@ def plot_trajectory_error(hist_indices: np.ndarray,
             if column_idx == 0:
                 axs[0, column_idx].set_ylabel('X Error (m)')
                 axs[1, column_idx].set_ylabel('Y Error (m)')
-                axs[2, column_idx].set_ylabel('Psi Error (rad)')
+                axs[2, column_idx].set_ylabel('Theta Error (rad)')
                 axs[0, column_idx].legend()
 
         column_idx += 1

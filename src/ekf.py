@@ -9,23 +9,23 @@ def _g(u_t, mu_t_1):
     Parameters:
     u_t: np.array, shape (3, 1)
         Control input at time t.
-        [[delta_x, delta_y, delta_psi]].T
+        [[delta_x, delta_y, delta_theta]].T
     mu_t_1: np.array, shape (3, 1)
         Previous state estimate.
-        [[x, y, psi]].T
+        [[x, y, theta]].T
 
     Returns:
     mu_t: np.array, shape (3, 1)
         Predicted state estimate.
     """
 
-    psi_t_1 = mu_t_1[2]
-    R = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1)],
-                  [np.sin(psi_t_1), np.cos(psi_t_1)]]).squeeze()
+    theta_t_1 = mu_t_1[2]
+    R = np.array([[np.cos(theta_t_1), -np.sin(theta_t_1)],
+                  [np.sin(theta_t_1), np.cos(theta_t_1)]]).squeeze()
     xy_t = R @ u_t[:2] + mu_t_1[:2]
-    psi_t = mu_t_1[2] + u_t[2]
+    theta_t = mu_t_1[2] + u_t[2]
 
-    return np.vstack([xy_t, psi_t])
+    return np.vstack([xy_t, theta_t])
 
 
 def _G_mu(u_t, mu_t_1):
@@ -34,17 +34,17 @@ def _G_mu(u_t, mu_t_1):
 
     Parameters:
     u_t: np.array, shape (3, 1)
-        Control input at time t. [[delta_x, delta_y, delta_psi]].T
+        Control input at time t. [[delta_x, delta_y, delta_theta]].T
     mu_t_1: np.array, shape (3, 1)
-        State estimate at time t-1. [[x, y, psi]].T
+        State estimate at time t-1. [[x, y, theta]].T
 
     Returns:
     G_mu_t: np.array, shape (3, 3)
     """
 
-    psi_t_1 = mu_t_1.item(2)
-    G_mu_t = np.array([[1, 0, -u_t.item(0) * np.sin(psi_t_1) - u_t.item(1) * np.cos(psi_t_1)],
-                       [0, 1, u_t.item(0) * np.cos(psi_t_1) - u_t.item(1) * np.sin(psi_t_1)],
+    theta_t_1 = mu_t_1.item(2)
+    G_mu_t = np.array([[1, 0, -u_t.item(0) * np.sin(theta_t_1) - u_t.item(1) * np.cos(theta_t_1)],
+                       [0, 1, u_t.item(0) * np.cos(theta_t_1) - u_t.item(1) * np.sin(theta_t_1)],
                        [0, 0, 1]])
 
     return G_mu_t
@@ -56,17 +56,17 @@ def _G_u(u_t, mu_t_1):
 
     Parameters:
     u_t: np.array, shape (3, 1)
-        Control input at time t. [[delta_x, delta_y, delta_psi]].T
+        Control input at time t. [[delta_x, delta_y, delta_theta]].T
     mu_t_1: np.array, shape (3, 1)
-        State estimate at time t-1. [[x, y, psi]].T
+        State estimate at time t-1. [[x, y, theta]].T
 
     Returns:
     G_u_t: np.array, shape (3, 3)
     """
 
-    psi_t_1 = mu_t_1.item(2)
-    G_u_t = np.array([[np.cos(psi_t_1), -np.sin(psi_t_1), 0],
-                      [np.sin(psi_t_1), np.cos(psi_t_1), 0],
+    theta_t_1 = mu_t_1.item(2)
+    G_u_t = np.array([[np.cos(theta_t_1), -np.sin(theta_t_1), 0],
+                      [np.sin(theta_t_1), np.cos(theta_t_1), 0],
                       [0, 0, 1]])
 
     return G_u_t
@@ -79,7 +79,7 @@ def _h_global(mu_t):
     Parameters:
     mu_t: np.array, shape (3, 1)
         Current state estimate. Contains the position, orientation, and velocity.
-        [[x, y, psi]].T
+        [[x, y, theta]].T
 
     Returns:
     np.array, shape (3, 1)
@@ -96,7 +96,7 @@ def _H_global(mu_t):
     Parameters:
     mu_t: np.array, shape (3, 1)
         Current state estimate. Contains the position, orientation, and velocity.
-        [[x, y, psi]].T
+        [[x, y, theta]].T
 
     Returns:
     H_global_t: np.array, shape (3, 3)
@@ -114,11 +114,11 @@ class EKF:
         """
         Parameters:
         mu_0: np.array, shape (3, 1)
-            Initial state estimate. Contains the position and orientation. [[x, y, psi]].T
+            Initial state estimate. Contains the position and orientation. [[x, y, theta]].T
         Sigma_0: np.array, shape (3, 3)
             Initial covariance matrix.
         odom_sigmas: np.array, shape (3, 1)
-            Standard deviations of the odometry noise. [[sigma_x, sigma_y, sigma_psi]].T
+            Standard deviations of the odometry noise. [[sigma_x, sigma_y, sigma_theta]].T
         """
         assert mu_0.shape == (3, 1)
         assert Sigma_0.shape == (3, 3)
@@ -142,7 +142,7 @@ class EKF:
         Parameters:
         u_t: np.array, shape (3, 1)
             Control input (odometry) at time t.
-            [[delta_x, delta_y, delta_psi]].T
+            [[delta_x, delta_y, delta_theta]].T
         """
         assert u_t.shape == (3, 1)
 
@@ -159,7 +159,7 @@ class EKF:
 
         Parameters:
         z_t: np.array, shape (3, 1)
-            Global measurement. [[x, y, psi]].T
+            Global measurement. [[x, y, theta]].T
         Q: np.array, shape (3, 3)
             Covariance matrix for the global measurement uncertainty.
         """

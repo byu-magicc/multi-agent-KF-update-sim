@@ -311,13 +311,13 @@ def _error_global(measurement: np.ndarray,
     """
     key = this.keys()[0]
     estimate = values.atPose2(key)
-    psi = estimate.theta()
+    theta = estimate.theta()
     estimate = np.array([estimate.x(), estimate.y(), estimate.theta()])
     error = estimate - measurement
 
     if jacobians is not None:
-        jacobians[0] = np.array([[np.cos(psi), -np.sin(psi), 0],
-                                 [np.sin(psi), np.cos(psi), 0],
+        jacobians[0] = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                 [np.sin(theta), np.cos(theta), 0],
                                  [0, 0, 1]])
 
     return error

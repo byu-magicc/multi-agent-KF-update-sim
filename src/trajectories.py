@@ -11,7 +11,7 @@ def line_trajectory(n_points, start_location, end_location):
     end_location (np.array): The ending location of the line. [[x, y]].T
 
     Returns:
-    np.array: The position and heading of the robot along a line trajectory. [[x1, y1, psi1].T, ... ].T
+    np.array: The position and heading of the robot along a line trajectory. [[x1, y1, theta1].T, ... ].T
     """
     assert n_points > 1
     assert start_location.shape == (2, 1)
@@ -39,7 +39,7 @@ def arc_trajectory(n_points, start_location, end_location, angle):
         line between the start and end points.
 
     Returns:
-    np.array: The position and heading of the robot along an arc trajectory. [[x1, y1, psi1].T, ... ].T
+    np.array: The position and heading of the robot along an arc trajectory. [[x1, y1, theta1].T, ... ].T
     """
     assert n_points > 1
     assert start_location.shape == (2, 1)
@@ -92,7 +92,7 @@ def sine_trajectory(n_points, start_location, end_location, amplitude, n_periods
         or an integer plus 0.5.
 
     Returns:
-    np.array: The position and heading of the robot along a sine trajectory. [[x1, y1, psi1].T, ... ].T
+    np.array: The position and heading of the robot along a sine trajectory. [[x1, y1, theta1].T, ... ].T
     """
     assert n_points > 1
     assert start_location.shape == (2, 1)
