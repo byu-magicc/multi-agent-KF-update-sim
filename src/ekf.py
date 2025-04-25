@@ -186,6 +186,7 @@ if __name__ == "__main__":
     odom_sigmas = np.array([0.1, 0.1, np.deg2rad(1)]).reshape(-1, 1)
 
     trajectory = sine_trajectory(num_steps, np.array([[0, 0]]).T, np.array([[100, 100]]).T, 5, 2)
+    hist_indices = np.arange(0, trajectory.shape[1])
 
     odom_data = get_odom_data(trajectory, odom_sigmas)
 
@@ -215,5 +216,6 @@ if __name__ == "__main__":
     plot_overview(trajectories=[Trajectory(trajectory[:2], name="Truth", color="r"),
                                 Trajectory(mu_hist["Vehicle 1"][0][:2], name="Estimate", color="b")],
                   covariances=[Covariance(ekf.Sigma[:2, :2], ekf.mu[:2], color="b")])
-    plot_trajectory_error(mu_hist, truth_hist, Sigma_hist)
+
+    plot_trajectory_error(hist_indices, truth_hist, mu_hist, Sigma_hist)
 
