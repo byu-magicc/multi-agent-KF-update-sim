@@ -114,6 +114,25 @@ class Vehicle:
 
         return self._ekf.mu, self._ekf.Sigma
 
+    def shared_update(self, z_gps, T_b_a, Sigma_GPS, Sigma_T):
+        """
+        Perform a shared GPS update.
+
+        Parameters:
+        z_gps: np.array, shape (2, 1)
+            GPS measurement recieved at vehicle a. [[x, y]].T
+        T_b_a: np.array, shape (2, 1)
+            Translation information from vehicle b to a, in the frame of vehicle b.
+            [[delta_x, delta_y]].T
+        Sigma_GPS: np.array, shape (2, 2)
+            Covariance matrix of GPS measurement, in global frame.
+        Sigma_T: np.array, shape (2, 2)
+            Covariance matrix of translation information, in the frame of vehicle b.
+        """
+        self._ekf.update_shared_gps(z_gps, T_b_a, Sigma_GPS, Sigma_T)
+
+        return self._ekf.mu, self._ekf.Sigma
+
     def get_history(self):
         """
         Get the estimate, truth and covariance history of the vehicle.

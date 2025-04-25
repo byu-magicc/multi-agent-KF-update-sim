@@ -46,7 +46,7 @@ class Simulation:
 
         # Measurement uncertainty
         INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1)
-        self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, np.deg2rad(15)]).reshape(-1, 1)
+        self.GPS_MEASUREMENT_STD = np.array([0.5, 0.5]).reshape(-1, 1)
         self.RANGE_MEASUREMENT_STD = 1.0
 
         # Create vehicles
@@ -120,16 +120,28 @@ class Simulation:
 
                     # Apply simulated global measurement
                     if vehicle.get_current_step() == self.GPS_STEP:
-                        global_meas = \
-                            vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
-                        global_meas += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD)
-                        curr_ekf_mu, curr_ekf_Sigma = vehicle.update(
-                            global_meas,
-                            np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2
-                        )
-                        self.backend.add_global(Global(f"{i}",
-                                                       global_meas,
-                                                       self.GLOBAL_MEASUREMENT_STD))
+                        if i == 0:
+                            # Vehicle a
+                            gps_meas = \
+                                vehicle._truth_hist[:2, vehicle._current_step].reshape(-1, 1).copy()
+                            gps_meas += np.random.normal(0, self.GPS_MEASUREMENT_STD)
+                            global_meas = np.vstack((gps_meas, vehicle._truth_hist[2, vehicle._current_step]))
+                            global_std = np.vstack((self.GPS_MEASUREMENT_STD, 1e5))
+
+                            curr_ekf_mu, curr_ekf_Sigma = vehicle.update(
+                                global_meas,
+                                np.diag(global_std.flatten())**2
+                            )
+                            self.backend.add_global(Global(f"{i}",
+                                                           global_meas,
+                                                           global_std))
+
+                            # Vehicle b
+                            Sigma_GPS = np.diag(self.GPS_MEASUREMENT_STD.flatten())**2
+                            T_b_a, Sigma_T = self.backend.get_tranformation(f"{1}", f"{0}")
+                            T_b_a = np.array([T_b_a.x(), T_b_a.y()]).reshape(-1, 1)
+                            Sigma_T = np.array(Sigma_T)[:2, :2]
+                            self.vehicles[1].shared_update(gps_meas, T_b_a, Sigma_GPS, Sigma_T)
 
                     # Apply simulated range measurements
                     if vehicle.get_current_step() in self.RANGE_MEASUREMENTS[:, 0]:

@@ -280,6 +280,56 @@ class Backend:
 
         return poses, covariances
 
+    def get_tranformation(self, vehicle_1: str, vehicle_2: str):
+        """
+        Get tranformation from vehicle_1 to vehicle_2 with the correct tranformational uncertainty.
+        Returns the transformation of the latest poses, in the vehicle_1 frame.
+
+        Mirrors Brendon's partial_update_msckf repository.
+        https://github.com/byu-magicc-archive/brendon__partial_update_msckf/blob/main/backend.py
+
+        vehicle_1: str
+            The name of the first vehicle.
+        vehicle_2: str
+            The name of the second vehicle.
+
+        Returns: (np.ndarray(3, 1), (np.ndarray(3, 3))
+            Transformation and covariance
+        """
+
+        # TODO: This function is suspect... the covariances don't look like I'd expect.
+        # I also don't understand how this function works, I just pulled it off of Brendon's
+        # non-funcional repo.
+
+        if vehicle_1 not in self.vehicle_pose_ids or vehicle_2 not in self.vehicle_pose_ids:
+            raise ValueError(f"Vehicle name {vehicle_1} or {vehicle_2} not found in priors.")
+
+        self._update()
+
+        # Get the latest poses
+        pose_1 = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_1][-1])
+        pose_2 = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_2][-1])
+        t_1_2 = gtsam.Pose2.between(pose_1, pose_2)
+
+        # Get the joint covariance of the two poses
+        marginals = gtsam.Marginals(self.graph, self.current_estimates)
+        joint_cov = marginals.jointMarginalCovariance([
+            self.vehicle_pose_ids[vehicle_1][-1],
+            self.vehicle_pose_ids[vehicle_2][-1]
+        ]).fullMatrix()
+        cov_1 = joint_cov[:3, :3]
+        cov_2 = joint_cov[3:, 3:]
+        cov_12 = joint_cov[:3, 3:]
+        cov_21 = joint_cov[3:, :3]
+
+        # Get the covariance of the transformation
+        # Uses right-hand purturbation equations?
+        adj = pose_2.inverse().AdjointMap() @ pose_1.AdjointMap()
+        cov = adj @ cov_1 @ adj.T + cov_2 - adj @ cov_12 - cov_21 @ adj.T
+
+        return t_1_2, cov
+
+
     def _update(self):
         """
         Update the graph if it is outdated.
@@ -368,6 +418,8 @@ if __name__ == "__main__":
     poses_1, covariances_1 = backend.get_full_trajectory("A")
     poses_2, covariances_2 = backend.get_full_trajectory("B")
 
+    print(backend.get_tranformation("B", "A"))
+
     plt.figure()
     plt.plot(poses_1[0, :], poses_1[1, :], color="b", marker="o", label="A")
     plt.plot(poses_2[0, :], poses_2[1, :], color="g", marker="o", label="B")
@@ -405,6 +457,7 @@ if __name__ == "__main__":
 
     plt.axis("equal")
     plt.legend()
+    plt.grid()
     plt.show()
 
 
