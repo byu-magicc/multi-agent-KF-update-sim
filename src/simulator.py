@@ -138,7 +138,7 @@ class Simulation:
 
                             # Vehicle b
                             Sigma_GPS = np.diag(self.GPS_MEASUREMENT_STD.flatten())**2
-                            T_b_a, Sigma_T = self.backend.get_tranformation(f"{1}", f"{0}")
+                            T_b_a, Sigma_T = self.backend.get_transformation(f"{1}", f"{0}")
                             T_b_a = np.array([T_b_a.x(), T_b_a.y()]).reshape(-1, 1)
                             Sigma_T = np.array(Sigma_T)[:2, :2]
                             self.vehicles[1].shared_update(gps_meas, T_b_a, Sigma_GPS, Sigma_T)

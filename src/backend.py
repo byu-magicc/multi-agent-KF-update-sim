@@ -280,7 +280,7 @@ class Backend:
 
         return poses, covariances
 
-    def get_tranformation(self, vehicle_1: str, vehicle_2: str):
+    def get_transformation(self, vehicle_1: str, vehicle_2: str):
         """
         Get tranformation from vehicle_1 to vehicle_2 with the correct tranformational uncertainty.
         Returns the transformation of the latest poses, in the vehicle_1 frame.
@@ -296,10 +296,6 @@ class Backend:
         Returns: (np.ndarray(3, 1), (np.ndarray(3, 3))
             Transformation and covariance
         """
-
-        # TODO: This function is suspect... the covariances don't look like I'd expect.
-        # I also don't understand how this function works, I just pulled it off of Brendon's
-        # non-funcional repo.
 
         if vehicle_1 not in self.vehicle_pose_ids or vehicle_2 not in self.vehicle_pose_ids:
             raise ValueError(f"Vehicle name {vehicle_1} or {vehicle_2} not found in priors.")
@@ -323,7 +319,6 @@ class Backend:
         cov_21 = joint_cov[3:, :3]
 
         # Get the covariance of the transformation
-        # Uses right-hand purturbation equations?
         adj = pose_2.inverse().AdjointMap() @ pose_1.AdjointMap()
         cov = adj @ cov_1 @ adj.T + cov_2 - adj @ cov_12 - cov_21 @ adj.T
 
@@ -418,7 +413,7 @@ if __name__ == "__main__":
     poses_1, covariances_1 = backend.get_full_trajectory("A")
     poses_2, covariances_2 = backend.get_full_trajectory("B")
 
-    print(backend.get_tranformation("B", "A"))
+    print(backend.get_transformation("B", "A"))
 
     plt.figure()
     plt.plot(poses_1[0, :], poses_1[1, :], color="b", marker="o", label="A")
