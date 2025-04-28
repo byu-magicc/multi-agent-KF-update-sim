@@ -280,54 +280,62 @@ class Backend:
 
         return poses, covariances
 
-    def get_tranformation(self, vehicle_1: str, vehicle_2: str):
+    def get_tranformation(self, vehicle_j: str, vehicle_k: str):
         """
-        Get tranformation from vehicle_1 to vehicle_2 with the correct tranformational uncertainty.
-        Returns the transformation of the latest poses, in the vehicle_1 frame.
+        Get transformation from vehicle_j to vehicle_k with the correct transformation uncertainty.
+        Returns the transformation of the latest poses, in the vehicle_j frame.
 
-        Mirrors Brendon's partial_update_msckf repository.
-        https://github.com/byu-magicc-archive/brendon__partial_update_msckf/blob/main/backend.py
-
-        vehicle_1: str
+        vehicle_j: str
             The name of the first vehicle.
-        vehicle_2: str
+        vehicle_k: str
             The name of the second vehicle.
 
         Returns: (np.ndarray(3, 1), (np.ndarray(3, 3))
             Transformation and covariance
         """
 
-        # TODO: This function is suspect... the covariances don't look like I'd expect.
-        # I also don't understand how this function works, I just pulled it off of Brendon's
-        # non-funcional repo.
-
-        if vehicle_1 not in self.vehicle_pose_ids or vehicle_2 not in self.vehicle_pose_ids:
-            raise ValueError(f"Vehicle name {vehicle_1} or {vehicle_2} not found in priors.")
+        if vehicle_j not in self.vehicle_pose_ids or vehicle_k not in self.vehicle_pose_ids:
+            raise ValueError(f"Vehicle name {vehicle_j} or {vehicle_k} not found in priors.")
 
         self._update()
 
-        # Get the latest poses
-        pose_1 = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_1][-1])
-        pose_2 = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_2][-1])
-        t_1_2 = gtsam.Pose2.between(pose_1, pose_2)
+        # Get the latest poses (i is inertial frame)
+        pose_ij = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_j][-1])
+        pose_ik = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_k][-1])
 
-        # Get the joint covariance of the two poses
+        # Get the transformation from vehicle_j to vehicle_k, in vehicle_j frame
+        t_j_k = gtsam.Pose2.between(pose_ij, pose_ik)
+
+        # Get the covariance of the two poses, in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
         joint_cov = marginals.jointMarginalCovariance([
-            self.vehicle_pose_ids[vehicle_1][-1],
-            self.vehicle_pose_ids[vehicle_2][-1]
+            self.vehicle_pose_ids[vehicle_j][-1],
+            self.vehicle_pose_ids[vehicle_k][-1]
         ]).fullMatrix()
-        cov_1 = joint_cov[:3, :3]
-        cov_2 = joint_cov[3:, 3:]
-        cov_12 = joint_cov[:3, 3:]
-        cov_21 = joint_cov[3:, :3]
 
-        # Get the covariance of the transformation
-        # Uses right-hand purturbation equations?
-        adj = pose_2.inverse().AdjointMap() @ pose_1.AdjointMap()
-        cov = adj @ cov_1 @ adj.T + cov_2 - adj @ cov_12 - cov_21 @ adj.T
+        R_ij = np.array([[np.cos(pose_ij.theta()), -np.sin(pose_ij.theta()), 0],
+                         [np.sin(pose_ij.theta()),  np.cos(pose_ij.theta()), 0],
+                         [0,                        0,                       1]])
+        R_ik = np.array([[np.cos(pose_ik.theta()), -np.sin(pose_ik.theta()), 0],
+                         [np.sin(pose_ik.theta()),  np.cos(pose_ik.theta()), 0],
+                         [0,                        0,                       1]])
+        R = np.zeros((6, 6))
+        R[:3, :3] = R_ij
+        R[3:, 3:] = R_ik
+        joint_cov = R @ joint_cov @ R.T
 
-        return t_1_2, cov
+        # Get the jacobian of the tail to tail transformation
+        theta_ij = pose_ij.theta()
+        x_ik_ij = pose_ik.x() - pose_ij.x()
+        y_ik_ij = pose_ik.y() - pose_ij.y()
+        J = np.array([[-np.cos(theta_ij), -np.sin(theta_ij), -np.sin(theta_ij)*x_ik_ij + np.cos(theta_ij)*y_ik_ij, np.cos(theta_ij), np.sin(theta_ij), 0],
+                      [np.sin(theta_ij), -np.cos(theta_ij), -np.cos(theta_ij)*x_ik_ij - np.sin(theta_ij)*y_ik_ij, -np.sin(theta_ij), np.cos(theta_ij), 0],
+                      [0, 0, -1, 0, 0, 1]])
+
+        # Compute the uncertainty of the transformation
+        cov = J @ joint_cov @ J.T
+
+        return t_j_k, cov
 
 
     def _update(self):
