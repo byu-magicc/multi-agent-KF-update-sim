@@ -2,6 +2,7 @@ import numpy as np
 
 from backend import Backend, Prior, Odometry, Global, Range
 from vehicle import Vehicle, TrajectoryType
+from measurements import get_pseudo_global_measurement
 
 
 class Simulation:
@@ -120,16 +121,27 @@ class Simulation:
 
                     # Apply simulated global measurement
                     if vehicle.get_current_step() == self.GPS_STEP:
-                        global_meas = \
-                            vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
-                        global_meas += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD)
-                        curr_ekf_mu, curr_ekf_Sigma = vehicle.update(
-                            global_meas,
-                            np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2
-                        )
-                        self.backend.add_global(Global(f"{i}",
-                                                       global_meas,
-                                                       self.GLOBAL_MEASUREMENT_STD))
+                        if i == 0:
+                            # Recieving agent
+                            global_meas = \
+                                vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
+                            global_meas += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD)
+                            curr_ekf_mu, curr_ekf_Sigma = vehicle.update(
+                                global_meas,
+                                np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2
+                            )
+
+                            # Backend
+                            self.backend.add_global(Global(f"{i}",
+                                                           global_meas,
+                                                           self.GLOBAL_MEASUREMENT_STD))
+
+                            # Other agents
+                            for j in range(1, len(self.vehicles)):
+                                ekf_mu, ekf_Sigma = self.vehicles[j].get_current_estimate()
+                                fg_mu, fg_Sigma = self.backend.get_vehicle_info(f"{j}")
+                                z_pseudo, Sigma_pseudo = get_pseudo_global_measurement(ekf_mu, fg_mu, ekf_Sigma, fg_Sigma)
+                                self.vehicles[j].update(z_pseudo, Sigma_pseudo)
 
                     # Apply simulated range measurements
                     if vehicle.get_current_step() in self.RANGE_MEASUREMENTS[:, 0]:

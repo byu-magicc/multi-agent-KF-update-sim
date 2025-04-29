@@ -114,6 +114,12 @@ class Vehicle:
 
         return self._ekf.mu, self._ekf.Sigma
 
+    def get_current_estimate(self):
+        """
+        Returns the current estimate mean and covariance
+        """
+        return self._ekf.mu, self._ekf.Sigma
+
     def get_history(self):
         """
         Get the estimate, truth and covariance history of the vehicle.
