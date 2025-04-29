@@ -164,6 +164,13 @@ class Simulation:
                                                          range_meas,
                                                          self.RANGE_MEASUREMENT_STD))
 
+                            # Pseudo measurements
+                            for j in range(0, len(self.vehicles)):
+                                ekf_mu, ekf_Sigma = self.vehicles[j].get_current_estimate()
+                                fg_mu, fg_Sigma = self.backend.get_vehicle_info(f"{j}")
+                                z_pseudo, Sigma_pseudo = get_pseudo_global_measurement(ekf_mu, fg_mu, ekf_Sigma, fg_Sigma)
+                                self.vehicles[j].update(z_pseudo, Sigma_pseudo)
+
                     # Get hist results
                     if vehicle.get_current_step() in hist_indices:
                         truth_hist[i].append(
