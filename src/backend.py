@@ -326,12 +326,25 @@ class Backend:
         # Rotate to the global frame
         theta = pose_1.theta()
         R = np.array([[np.cos(theta), -np.sin(theta), 0],
-                     [np.sin(theta),  np.cos(theta), 0],
-                     [0,              0,             1]])
-        t_1_2 = R @ t_1_2
-        cov = R @ cov @ R.T
+                      [np.sin(theta),  np.cos(theta), 0],
+                      [0,              0,             1]])
+        t_1_2_global = R @ t_1_2
 
-        return t_1_2, cov
+        # Get covariance of global rotation
+        J = np.hstack((R,
+                       np.array([[-np.sin(theta)*t_1_2.item(0) - np.cos(theta)*t_1_2.item(1)],
+                                 [ np.cos(theta)*t_1_2.item(0) - np.sin(theta)*t_1_2.item(1)],
+                                 [0]])
+                       ))
+
+        marginals = gtsam.Marginals(self.graph, self.current_estimates)
+        cov_full = np.zeros((4, 4))
+        cov_full[:3, :3] = cov
+        cov_full[3, 3] = marginals.marginalCovariance(self.vehicle_pose_ids[vehicle_1][-1])[2, 2]
+
+        cov_global = J @ cov_full @ J.T
+
+        return t_1_2_global, cov_global
 
 
     def _update(self):
