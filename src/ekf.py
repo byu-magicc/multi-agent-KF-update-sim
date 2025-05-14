@@ -90,31 +90,6 @@ def _h_global(mu_t):
 
 
 
-def _h_shared_GPS(mu_t, z_gps, T_b_a):
-    """
-    Measurement model for shared GPS update. Doesn't return predicted measurement, but measurement
-    residual.
-
-    Parameters:
-    mu_t: np.array, shape (3, 1)
-        Current state estimate. Contains the position, orientation, and velocity.
-        [[x, y, theta]].T
-    z_gps: np.array, shape (2, 1)
-        GPS measurement. [[x, y]].T
-    T_b_a: np.array, shape (2, 1)
-        Translation from vehicle b to vehicle a, in frame of vehicle b. [[delta_x, delta_y]].T
-
-    Returns:
-    np.array, shape (2, 1)
-        Measurement residual.
-    """
-    theta = mu_t.item(2)
-    R = np.array([[np.cos(theta), -np.sin(theta)],
-                  [np.sin(theta), np.cos(theta)]]).squeeze()
-
-    return z_gps - (mu_t[:2] + R @ T_b_a)
-
-
 def _H_global(mu_t):
     """
     Jacobian of the global measurement model with respect to the state.
@@ -130,46 +105,6 @@ def _H_global(mu_t):
     """
 
     return np.eye(3, 3)
-
-
-def _H_shared_GPS(theta_t, T_b_a):
-    """
-    Jacobian of the shared GPS measurement with respect to the state.
-
-    Parameters
-    theta: float
-        Current theta estimate.
-    T_b_a: np.array, shape (2, 1)
-        Translation from vehicle b to vehicle a, in frame of vehicle b. [[delta_x, delta_y]].T
-
-    Returns:
-    H_shared_GPS: np.array, shape (2, 2)
-        Jacobian of the shared GPS measurement.
-    """
-    assert T_b_a.shape == (2, 1)
-
-    H_shared_GPS = np.array([[1, 0, -T_b_a.item(0) * np.sin(theta_t) - T_b_a.item(1) * np.cos(theta_t)],
-                             [0, 1, T_b_a.item(0) * np.cos(theta_t) - T_b_a.item(1) * np.sin(theta_t)]])
-
-    return H_shared_GPS
-
-
-def _F_shared_GPS(theta_t):
-    """
-    Jacobian of the shared GPS measurement with respect to the measurement.
-
-    Parameters
-    theta: float
-        Current theta estimate.
-
-    Returns:
-    F_shared_GPS: np.array, shape (2, 2)
-        Jacobian of the shared GPS measurement.
-    """
-    F_shared_GPS = np.array([[-1, 0, np.cos(theta_t), -np.sin(theta_t)],
-                             [0, -1, np.sin(theta_t), np.cos(theta_t)]])
-
-    return F_shared_GPS
 
 
 class EKF:
@@ -196,12 +131,9 @@ class EKF:
 
         self.g = _g
         self.h_global = _h_global
-        self.h_shared_GPS = _h_shared_GPS
         self.G_mu = _G_mu
         self.G_u = _G_u
         self.H_global = _H_global
-        self.H_shared_GPS = _H_shared_GPS
-        self.F_shared_GPS = _F_shared_GPS
 
     def propagate(self, u_t):
         """
@@ -240,41 +172,45 @@ class EKF:
         self.mu = self.mu + K_t @ (z_t - self.h_global(self.mu))
         self.Sigma = (np.eye(3) - K_t @ H_t) @ self.Sigma
 
-    def update_shared_gps(self, z_gps, T_b_a, Sigma_GPS, Sigma_T):
+    def update_shared_global(self, z_global, t_a_b, Sigma_global, Sigma_t, theta_a):
         """
         Apply a shared global measurement to the state estimate and covariance matrix.
-        Shared measurements are when a different agent (a) recieves a GPS measurement and translation
+        Shared measurements are when a different agent (a) recieves a global measurement and translation
         information from a multi-agent backend is used to apply that measurement to another vehicle
         (b).
 
         Parameters:
-        z_gps: np.array, shape (2, 1)
-            GPS measurement recieved at vehicle a. [[x, y]].T
-        T_b_a: np.array, shape (2, 1)
-            Translation information from vehicle b to a, in the frame of vehicle b.
-            [[delta_x, delta_y]].T
-        Sigma_GPS: np.array, shape (2, 2)
-            Covariance matrix of GPS measurement, in global frame.
-        Sigma_T: np.array, shape (2, 2)
-            Covariance matrix of translation information, in the frame of vehicle b.
+        z_global: np.array, shape (3, 1)
+            Global measurement recieved at vehicle a. [[x, y, theta]].T
+        t_b_a: np.array, shape (3, 1)
+            Tranform information from vehicle a to b, in the frame of vehicle a.
+            [[delta_x, delta_y, delta_theta]].T
+        Sigma_global: np.array, shape (3, 3)
+            Covariance matrix of global measurement, in global frame.
+        Sigma_t: np.array, shape (3, 3)
+            Covariance matrix of translation information, in the frame of vehicle a.
+        theta_b: float
+            Current heading estimate of vehicle a.
         """
-        assert z_gps.shape == (2, 1)
-        assert T_b_a.shape == (2, 1)
-        assert Sigma_GPS.shape == (2, 2)
-        assert Sigma_T.shape == (2, 2)
+        assert z_global.shape == (3, 1)
+        assert t_a_b.shape == (3, 1)
+        assert Sigma_global.shape == (3, 3)
+        assert Sigma_t.shape == (3, 3)
 
-        res = self.h_shared_GPS(self.mu, z_gps, T_b_a)
-        H_t = self.H_shared_GPS(self.mu.item(2), T_b_a)
-        F_t = self.F_shared_GPS(self.mu.item(2))
+        # Calculate the measurement
+        R = np.array([[np.cos(theta_a), -np.sin(theta_a), 0],
+                      [np.sin(theta_a),  np.cos(theta_a), 0],
+                      [              0,                0, 1]])
+        z = z_global + R @ t_a_b
 
-        Sigma_z = np.zeros((4, 4))
-        Sigma_z[:2, :2] = Sigma_GPS
-        Sigma_z[2:, 2:] = Sigma_T
+        # Calculate covariance of tranformed measurement
+        Sigma_temp = np.zeros((6, 6))
+        Sigma_temp[:3, :3] = Sigma_global
+        Sigma_temp[3:, 3:] = Sigma_t
+        J = np.hstack((np.eye(3), R))
+        Sigma_z = J @ Sigma_temp @ J.T
 
-        S_t = H_t @ self.Sigma @ H_t.T + F_t @ Sigma_z @ F_t.T
-        K_t = self.Sigma @ H_t.T @ np.linalg.inv(S_t)
-        self.mu = self.mu + K_t @ res
-        self.Sigma = (np.eye(3) - K_t @ H_t) @ self.Sigma
+        self.update_global(z, Sigma_z)
 
 
 if __name__ == "__main__":
