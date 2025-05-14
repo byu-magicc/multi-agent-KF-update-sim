@@ -172,7 +172,7 @@ class EKF:
         self.mu = self.mu + K_t @ (z_t - self.h_global(self.mu))
         self.Sigma = (np.eye(3) - K_t @ H_t) @ self.Sigma
 
-    def update_shared_global(self, z_global, t_a_b, Sigma_global, Sigma_t, theta_a):
+    def update_shared_global(self, z_global, t_a_b, Sigma_global, Sigma_t):
         """
         Apply a shared global measurement to the state estimate and covariance matrix.
         Shared measurements are when a different agent (a) recieves a global measurement and translation
@@ -189,25 +189,19 @@ class EKF:
             Covariance matrix of global measurement, in global frame.
         Sigma_t: np.array, shape (3, 3)
             Covariance matrix of translation information, in the frame of vehicle a.
-        theta_b: float
-            Current heading estimate of vehicle a.
         """
         assert z_global.shape == (3, 1)
         assert t_a_b.shape == (3, 1)
         assert Sigma_global.shape == (3, 3)
         assert Sigma_t.shape == (3, 3)
 
-        # Calculate the measurement
-        R = np.array([[np.cos(theta_a), -np.sin(theta_a), 0],
-                      [np.sin(theta_a),  np.cos(theta_a), 0],
-                      [              0,                0, 1]])
-        z = z_global + R @ t_a_b
+        z = z_global + t_a_b
+        J = np.hstack((np.eye(3), np.eye(3)))
 
         # Calculate covariance of tranformed measurement
         Sigma_temp = np.zeros((6, 6))
         Sigma_temp[:3, :3] = Sigma_global
         Sigma_temp[3:, 3:] = Sigma_t
-        J = np.hstack((np.eye(3), R))
         Sigma_z = J @ Sigma_temp @ J.T
 
         self.update_global(z, Sigma_z)

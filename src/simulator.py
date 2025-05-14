@@ -137,9 +137,7 @@ class Simulation:
                             # Vehicle b
                             Sigma_global = np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2
                             t_a_b, Sigma_t = self.backend.get_transformation(f"{0}", f"{1}")
-                            theta_a = self.backend.get_vehicle_info(f"{0}")[0].item(2)
-                            t_a_b = np.array([t_a_b.x(), t_a_b.y(), t_a_b.theta()]).reshape(-1, 1)
-                            self.vehicles[1].shared_update(global_meas, t_a_b, Sigma_global, Sigma_t, theta_a)
+                            self.vehicles[1].shared_update(global_meas, t_a_b, Sigma_global, Sigma_t)
 
                     # Apply simulated range measurements
                     if vehicle.get_current_step() in self.RANGE_MEASUREMENTS[:, 0]:

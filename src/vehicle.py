@@ -114,8 +114,8 @@ class Vehicle:
 
         return self._ekf.mu, self._ekf.Sigma
 
-    def shared_update(self, z_global, t_a_b, Sigma_global, Sigma_t, theta_a):
-        self._ekf.update_shared_global(z_global, t_a_b, Sigma_global, Sigma_t, theta_a)
+    def shared_update(self, z_global, t_a_b, Sigma_global, Sigma_t):
+        self._ekf.update_shared_global(z_global, t_a_b, Sigma_global, Sigma_t)
         return self._ekf.mu, self._ekf.Sigma
 
     def get_history(self):
