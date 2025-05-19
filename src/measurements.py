@@ -44,6 +44,10 @@ def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_d
     Returns:
     z, Sigma_z: Pseudo global measurement and covariance.
     """
+    assert mu_current.shape == (3, 1)
+    assert mu_desired.shape == (3, 1)
+    assert Sigma_current.shape == (3, 3)
+    assert Sigma_desired.shape == (3, 3)
 
     temp = np.linalg.inv(np.eye(3) - Sigma_desired @ np.linalg.inv(Sigma_current))
     Sigma_z = (temp - np.eye(3)) @ Sigma_current
