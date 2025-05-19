@@ -30,6 +30,28 @@ def get_odom_data(trajectory, odom_sigmas):
     return odom_measurements
 
 
+def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_desired):
+    """
+    Get pseudo global measurement. Pseudo global measurements are measurements intended to
+    force an estimator from one mean and covariance to another mean and covariance.
+
+    Parameters:
+    mu_current (np.array): 3x1 numpy array of current filter state. [[x, y, theta]].T
+    mu_desired (np.array): 3x1 numpy array of desired filter state. [[x, y, theta]].T
+    Sigma_current (np.array): 3x3 numpy array of current filter covariance.
+    Sigma_desired (np.array): 3x3 numpy array of desired filter covariance.
+
+    Returns:
+    z, Sigma_z: Pseudo global measurement and covariance.
+    """
+
+    temp = np.linalg.inv(np.eye(3) - Sigma_desired @ np.linalg.inv(Sigma_current))
+    Sigma_z = (temp - np.eye(3)) @ Sigma_current
+    z = temp @ (mu_desired - mu_current) + mu_current
+
+    return z, Sigma_z
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from plotters import plot_overview, Trajectory
