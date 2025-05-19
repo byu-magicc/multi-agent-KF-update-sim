@@ -232,93 +232,89 @@ def plot_trajectory_error(hist_indices: np.ndarray,
     alpha = 0.5 if overlay_plots else 1.0
 
     # Calculate population standard deviation
-    calculated_ekf_sigma = {}
-    calculated_ekf_sigma_normalized = {}
-    calculated_backend_sigma = {}
-    calculated_backend_sigma_normalized = {}
+    ekf_error_sigma = {}
+    ekf_error_nees = {}
+    backend_error_sigma = {}
+    backend_error_nees = {}
     for key in ekf_mu_hist.keys():
         ekf_residuals = []
-        ekf_residuals_normalized = []
+        nees = []
         for i in range(len(ekf_mu_hist[key])):
-            ekf_residuals.append((ekf_mu_hist[key][i] - truth_hist[key][i])**2)
-            ekf_residuals_normalized.append(
-                ((ekf_mu_hist[key][i] - truth_hist[key][i]) /
-                 np.sqrt(np.diagonal(ekf_Sigma_hist[key][i], axis1=1, axis2=2).T))**2
-            )
-        ekf_residuals = np.array(ekf_residuals)
-        ekf_residuals_normalized = np.array(ekf_residuals_normalized)
-        calculated_ekf_sigma[key] = np.sqrt(np.mean(ekf_residuals, axis=0))
-        calculated_ekf_sigma_normalized[key] = np.sqrt(np.mean(ekf_residuals_normalized, axis=0))
+            residuals = ekf_mu_hist[key][i] - truth_hist[key][i]
+            ekf_residuals.append(residuals)
+
+            Sigmas = ekf_Sigma_hist[key][i]
+            nees_temp = []
+            for j in range(residuals.shape[1]):
+                res = residuals[:, j].reshape(-1, 1)
+                Sigma = Sigmas[j]
+                nees_temp.append((res.T @ np.linalg.inv(Sigma) @ res).item(0))
+            nees.append(nees_temp)
+
+        ekf_error_sigma[key] = np.sqrt(np.mean(np.array(ekf_residuals)**2, axis=0))
+        ekf_error_nees[key] = np.mean(nees, axis=0)
 
         if plot_backend:
             backend_residuals = []
-            backend_residuals_normalized = []
+            nees = []
             for i in range(len(backend_mu_hist[key])):
-                backend_residuals.append((backend_mu_hist[key][i] - truth_hist[key][i])**2)
-                backend_residuals_normalized.append(
-                    ((backend_mu_hist[key][i] - truth_hist[key][i]) /
-                     np.sqrt(np.diagonal(backend_Sigma_hist[key][i], axis1=1, axis2=2).T))**2
-                )
-            backend_residuals = np.array(backend_residuals)
-            backend_residuals_normalized = np.array(backend_residuals_normalized)
-            calculated_backend_sigma[key] = np.sqrt(np.mean(backend_residuals, axis=0))
-            calculated_backend_sigma_normalized[key] = np.sqrt(
-                np.mean(backend_residuals_normalized, axis=0)
-            )
+                residuals = backend_mu_hist[key][i] - truth_hist[key][i]
+                backend_residuals.append(residuals)
+
+                Sigmas = backend_Sigma_hist[key][i]
+                nees_temp = []
+                for j in range(residuals.shape[1]):
+                    res = residuals[:, j].reshape(-1, 1)
+                    Sigma = Sigmas[j]
+                    nees_temp.append((res.T @ np.linalg.inv(Sigma) @ res).item(0))
+                nees.append(nees_temp)
+
+            backend_error_sigma[key] = np.sqrt(np.mean(np.array(backend_residuals)**2, axis=0))
+            backend_error_nees[key] = np.mean(nees, axis=0)
 
     # Covariance only plots
     if sigma_only:
         # Error plots
-        fig, axs = plt.subplots(3, len(ekf_mu_hist.keys()), figsize=(16, 12))
+        fig, axs = plt.subplots(4, len(ekf_mu_hist.keys()), figsize=(16, 12))
         if len(ekf_mu_hist.keys()) == 1:
             axs = np.expand_dims(axs, axis=1)
         column_idx = 0
         for key in ekf_mu_hist.keys():
             # X
-            axs[0, column_idx].plot(hist_indices,
-                                    calculated_ekf_sigma[key][0, :] / calculated_ekf_sigma_normalized[key][0, :],
-                                    label='EKF Estimated Sigma', color='b')
-            axs[0, column_idx].plot(hist_indices, calculated_ekf_sigma[key][0, :],
-                                    label='EKF Actual Sigma', color='g')
+            axs[0, column_idx].plot(hist_indices, ekf_error_sigma[key][0, :],
+                                    label='EKF', color='g')
             axs[0, column_idx].set_title(key)
             axs[0, column_idx].grid()
             if plot_backend:
-                axs[0, column_idx].plot(hist_indices,
-                                        calculated_backend_sigma[key][0, :] / calculated_backend_sigma_normalized[key][0, :],
-                                        label='FG Estimated Sigma', color='c')
-                axs[0, column_idx].plot(hist_indices, calculated_backend_sigma[key][0, :],
-                                        label='FG Actual Sigma', color='m')
+                axs[0, column_idx].plot(hist_indices, backend_error_sigma[key][0, :],
+                                        label='FG', color='m')
 
             # Y
-            axs[1, column_idx].plot(hist_indices,
-                                    calculated_ekf_sigma[key][1, :] / calculated_ekf_sigma_normalized[key][1, :],
-                                    color='b')
-            axs[1, column_idx].plot(hist_indices, calculated_ekf_sigma[key][1, :], color='g')
+            axs[1, column_idx].plot(hist_indices, ekf_error_sigma[key][1, :], color='g')
             axs[1, column_idx].grid()
             if plot_backend:
-                axs[1, column_idx].plot(hist_indices,
-                                        calculated_backend_sigma[key][1, :] / calculated_backend_sigma_normalized[key][1, :],
-                                        color='c')
-                axs[1, column_idx].plot(hist_indices, calculated_backend_sigma[key][1, :], color='m')
+                axs[1, column_idx].plot(hist_indices, backend_error_sigma[key][1, :], color='m')
 
             # Theta
-            axs[2, column_idx].plot(hist_indices,
-                                    calculated_ekf_sigma[key][2, :] / calculated_ekf_sigma_normalized[key][2, :],
-                                    color='b')
-            axs[2, column_idx].plot(hist_indices, calculated_ekf_sigma[key][2, :], color='g')
-            axs[2, column_idx].set_xlabel('Distance (m)')
+            axs[2, column_idx].plot(hist_indices, ekf_error_sigma[key][2, :], color='g')
             axs[2, column_idx].grid()
             if plot_backend:
-                axs[2, column_idx].plot(hist_indices,
-                                        calculated_backend_sigma[key][2, :] / calculated_backend_sigma_normalized[key][2, :],
-                                        color='c')
-                axs[2, column_idx].plot(hist_indices, calculated_backend_sigma[key][2, :], color='m')
+                axs[2, column_idx].plot(hist_indices, backend_error_sigma[key][2, :], color='m')
+
+            # NEES
+            axs[3, column_idx].plot(hist_indices, ekf_error_nees[key], color='g')
+            axs[3, column_idx].set_xlabel('Distance (m)')
+            axs[3, column_idx].axhline(3.0, color='k', linestyle='--')
+            axs[3, column_idx].grid()
+            if plot_backend:
+                axs[3, column_idx].plot(hist_indices, backend_error_nees[key], color='m')
 
             # Add ylabels and legend
             if column_idx == 0:
                 axs[0, column_idx].set_ylabel('X Error (m)')
                 axs[1, column_idx].set_ylabel('Y Error (m)')
                 axs[2, column_idx].set_ylabel('Theta Error (rad)')
+                axs[3, column_idx].set_ylabel('NEES')
                 axs[0, column_idx].legend()
 
             column_idx += 1
