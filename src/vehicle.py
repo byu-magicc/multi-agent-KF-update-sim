@@ -94,28 +94,16 @@ class Vehicle:
 
         return self._ekf.mu, self._ekf.Sigma
 
-    def update(self, z_t, sigma_z):
-        """
-        Update the state estimate with a global measurement.
-
-        Parameters:
-        z_t: np.array, shape (3, 1)
-            Global measurement [x, y, theta] in world frame.
-        sigma_z: np.array, shape (3, 3)
-            Covariance of the global measurement.
-
-        Returns:
-        mu: np.array, shape (3, 1)
-            Updated state estimate. [x, y, theta]
-        Sigma: np.array, shape (3, 3)
-            Updated state covariance.
-        """
-        self._ekf.update_global(z_t, sigma_z)
-
+    def global_update(self, z_t, sigma_z):
+        self._ekf.global_update(z_t, sigma_z)
         return self._ekf.mu, self._ekf.Sigma
 
-    def shared_update(self, z_global, t_a_b, Sigma_global, Sigma_t):
-        self._ekf.update_shared_global(z_global, t_a_b, Sigma_global, Sigma_t)
+    def shared_global_update(self, z_global, t_a_b, Sigma_global, Sigma_t):
+        self._ekf.shared_global_update(z_global, t_a_b, Sigma_global, Sigma_t)
+        return self._ekf.mu, self._ekf.Sigma
+ 
+    def range_update(self, z_t, Q, x_b, Sigma_b):
+        self._ekf.range_update(z_t, Q, x_b, Sigma_b)
         return self._ekf.mu, self._ekf.Sigma
 
     def get_history(self):
@@ -170,7 +158,7 @@ if __name__ == "__main__":
         if vehicle.get_current_step() % 75 == 0 and vehicle.get_current_step() != 0:
             global_meas = vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
             global_meas += np.random.normal(0, global_sigmas)
-            vehicle.update(global_meas, np.diag(global_sigmas.flatten())**2)
+            vehicle.global_update(global_meas, np.diag(global_sigmas.flatten())**2)
 
     mu_hist, truth_hist, Sigma_hist = vehicle.get_history()
 

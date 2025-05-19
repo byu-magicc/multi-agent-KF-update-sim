@@ -107,6 +107,41 @@ def _H_global(mu_t):
     return np.eye(3, 3)
 
 
+def _h_range(mu_a_t, mu_b_t):
+    """
+    Range measurement model.
+
+    Parameters:
+    mu_a_t: np.array, shape (3, 1)
+        State estimate of vehicle a. [[x_a, y_a, theta_a]].T
+    mu_b_t: np.array, shape (3, 1)
+        State estimate of vehicle b. [[x_b, y_b, theta_b]].T
+    """
+
+    return np.linalg.norm(mu_a_t[:2] - mu_b_t[:2]).item(0)
+
+
+def _H_range(mu_a_t, mu_b_t):
+    """
+    Jacobian of the range measurement model with respect to vehicle a's state.
+
+    Parameters:
+    mu_a_t: np.array, shape (3, 1)
+        State estimate of vehicle a. [[x_a, y_a, theta_a]].T
+    mu_b_t: np.array, shape (3, 1)
+        State estimate of vehicle b. [[x_b, y_b, theta_b]].T
+    """
+
+    range = np.linalg.norm(mu_a_t[:2] - mu_b_t[:2]).item(0)
+
+    x_a = mu_a_t.item(0)
+    y_a = mu_a_t.item(1)
+    x_b = mu_b_t.item(0)
+    y_b = mu_b_t.item(1)
+
+    return np.array([[(x_a - x_b) / range, (y_a - y_b) / range, 0]])
+
+
 class EKF:
     """
     Basic EKF class for odometry propagation and global measurements.
@@ -131,9 +166,11 @@ class EKF:
 
         self.g = _g
         self.h_global = _h_global
+        self.h_range = _h_range
         self.G_mu = _G_mu
         self.G_u = _G_u
         self.H_global = _H_global
+        self.H_range = _H_range
 
     def propagate(self, u_t):
         """
@@ -153,7 +190,7 @@ class EKF:
         self.mu = self.g(u_t, self.mu)
         self.Sigma = G_mu_t @ self.Sigma @ G_mu_t.T + G_u_t @ self.R @ G_u_t.T
 
-    def update_global(self, z_t, Q):
+    def global_update(self, z_t, Q):
         """
         Apply a global measurement to the state estimate and covariance matrix.
 
@@ -172,7 +209,7 @@ class EKF:
         self.mu = self.mu + K_t @ (z_t - self.h_global(self.mu))
         self.Sigma = (np.eye(3) - K_t @ H_t) @ self.Sigma
 
-    def update_shared_global(self, z_global, t_a_b, Sigma_global, Sigma_t):
+    def shared_global_update(self, z_global, t_a_b, Sigma_global, Sigma_t):
         """
         Apply a shared global measurement to the state estimate and covariance matrix.
         Shared measurements are when a different agent (a) recieves a global measurement and translation
@@ -204,7 +241,37 @@ class EKF:
         Sigma_temp[3:, 3:] = Sigma_t
         Sigma_z = J @ Sigma_temp @ J.T
 
-        self.update_global(z, Sigma_z)
+        self.global_update(z, Sigma_z)
+
+    def range_update(self, z_t, Sigma_z, x_b, Sigma_b):
+        """
+        Apply a range measurement recieved between two vehicles. Correlation between vehicles is
+        ignored, for simplicity.
+
+        Parameters:
+        z_t: float
+            Range measurement.
+        Q: float
+            Variance of range measurement.
+        x_b: np.array, shape (3, 1)
+            Current state of other vehicle. [[x, y, theta]].T
+        Sigma_b: np.array, shape (3, 3)
+            Covariance of other vehicle state.
+        """
+        assert x_b.shape == (3, 1)
+        assert Sigma_b.shape == (3, 3)
+
+        H_t = self.H_range(self.mu, x_b)
+
+        F = np.hstack((np.ones((1, 1)), -H_t))
+        Sigma = np.zeros((4, 4))
+        Sigma[0, 0] = Sigma_z
+        Sigma[1:, 1:] = Sigma_b
+        Q = F @ Sigma @ F.T
+
+        K_t = self.Sigma @ H_t.T @ np.linalg.inv(H_t @ self.Sigma @ H_t.T + Q)
+        self.mu = self.mu + K_t * (z_t - self.h_range(self.mu, x_b))
+        self.Sigma = (np.eye(3) - K_t @ H_t) @ self.Sigma
 
 
 if __name__ == "__main__":
@@ -242,7 +309,7 @@ if __name__ == "__main__":
 
         if i % 50 == 0 and i != 0:
             global_meas = trajectory[:3, i + 1].reshape(-1, 1)
-            ekf.update_global(global_meas, Sigma_global)
+            ekf.global_update(global_meas, Sigma_global)
 
     mu_hist["Vehicle 1"] = [np.hstack(mu_hist["Vehicle 1"])]
     Sigma_hist["Vehicle 1"] = [np.array(Sigma_hist["Vehicle 1"])]

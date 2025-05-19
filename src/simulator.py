@@ -40,22 +40,15 @@ class Simulation:
             TRAJECTORY_TYPE = TrajectoryType.ARC
 
         # Measurement intervals
-        self.GLOBAL_STEP = [667, 1333]
-        self.RANGE_MEASUREMENTS = np.array([[100, 0, 1],
-                                            [200, 0, 1],
-                                            [300, 0, 1],
-                                            [400, 0, 1],
-                                            [500, 0, 1],
-                                            [600, 0, 1],
-                                            [700, 0, 1],
-                                            [800, 0, 1],
-                                            [900, 0, 1],
-                                            [1000, 0, 1],
-                                            [1100, 0, 1],
-                                            [1200, 0, 1],
-                                            [1300, 0, 1],
-                                            [1400, 0, 1],
-                                            [1500, 0, 1]], dtype=int)
+        self.GLOBAL_STEP = []
+        self.RANGE_MEASUREMENTS = np.array([
+            [250, 0, 1],
+            [500, 0, 1],
+            [750, 0, 1],
+            [1000, 0, 1],
+            [1250, 0, 1],
+            [1500, 0, 1],
+        ], dtype=int)
 
         # Measurement uncertainty
         INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1) * 1e-15
@@ -139,7 +132,7 @@ class Simulation:
                                 vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
                             global_meas[:2] += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD[:2])
 
-                            curr_ekf_mu, curr_ekf_Sigma = vehicle.update(
+                            curr_ekf_mu, curr_ekf_Sigma = vehicle.global_update(
                                 global_meas,
                                 np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2
                             )
@@ -150,7 +143,7 @@ class Simulation:
                             # Vehicle b
                             Sigma_global = np.diag(self.GLOBAL_MEASUREMENT_STD.flatten())**2
                             t_a_b, Sigma_t = self.backend.get_transformation(f"{0}", f"{1}")
-                            self.vehicles[1].shared_update(global_meas, t_a_b, Sigma_global, Sigma_t)
+                            self.vehicles[1].shared_global_update(global_meas, t_a_b, Sigma_global, Sigma_t)
 
                     # Apply simulated range measurements
                     if vehicle.get_current_step() in self.RANGE_MEASUREMENTS[:, 0]:
@@ -167,6 +160,17 @@ class Simulation:
                                 vehicle_1._truth_hist[:2, vehicle_1._current_step].copy()
                             range_meas = np.linalg.norm(vehicle_0_position - vehicle_1_position)
                             range_meas += np.random.normal(0, self.RANGE_MEASUREMENT_STD)
+
+                            mu_0 = vehicle_0._ekf.mu.copy()
+                            Sigma_0 = vehicle_0._ekf.Sigma.copy()
+                            vehicle_0.range_update(range_meas,
+                                                   self.RANGE_MEASUREMENT_STD**2,
+                                                   vehicle_1._ekf.mu,
+                                                   vehicle_1._ekf.Sigma)
+                            vehicle_1.range_update(range_meas,
+                                                   self.RANGE_MEASUREMENT_STD**2,
+                                                   mu_0,
+                                                   Sigma_0)
 
                             self.backend.add_range(Range(f"{curr_meas[1]}",
                                                          f"{curr_meas[2]}",
