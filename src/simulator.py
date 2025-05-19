@@ -40,8 +40,21 @@ class Simulation:
             TRAJECTORY_TYPE = TrajectoryType.ARC
 
         # Measurement intervals
-        self.GLOBAL_STEP = 1000
-        self.RANGE_MEASUREMENTS = np.array([[500, 0, 1],
+        self.GLOBAL_STEP = [667, 1333]
+        self.RANGE_MEASUREMENTS = np.array([[100, 0, 1],
+                                            [200, 0, 1],
+                                            [300, 0, 1],
+                                            [400, 0, 1],
+                                            [500, 0, 1],
+                                            [600, 0, 1],
+                                            [700, 0, 1],
+                                            [800, 0, 1],
+                                            [900, 0, 1],
+                                            [1000, 0, 1],
+                                            [1100, 0, 1],
+                                            [1200, 0, 1],
+                                            [1300, 0, 1],
+                                            [1400, 0, 1],
                                             [1500, 0, 1]], dtype=int)
 
         # Measurement uncertainty
@@ -119,7 +132,7 @@ class Simulation:
                                                        self.vehicles[i]._odom_sigmas))
 
                     # Apply simulated global measurement
-                    if vehicle.get_current_step() == self.GLOBAL_STEP:
+                    if vehicle.get_current_step() in self.GLOBAL_STEP:
                         if i == 0:
                             # Vehicle a
                             global_meas = \
