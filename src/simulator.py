@@ -52,7 +52,7 @@ class Simulation:
         ], dtype=int)
 
         # Measurement uncertainty
-        INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1) * 1e-15
+        INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1)
         self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, 1e9]).reshape(-1, 1)
         self.RANGE_MEASUREMENT_STD = 1.0
 
