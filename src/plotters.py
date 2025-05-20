@@ -179,7 +179,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
     bound.
 
     Parameters:
-    hist_indices: np.array of floats (n)
+    time_hist: np.array of floats (n)
         Time of elements in history arrays.
     truth_hist: Dictionary of List of np.arrays (5 x n)
         Ground truth for every timestep for any number of iterations, where the key is the vehicle
@@ -208,6 +208,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
     for key in truth_hist.keys():
         assert key in ekf_mu_hist.keys()
         assert key in ekf_Sigma_hist.keys()
+        assert time_hist.ndim == 1
         assert len(truth_hist[key]) == len(ekf_mu_hist[key])
         assert len(truth_hist[key]) == len(ekf_Sigma_hist[key])
         if plot_backend:
@@ -217,6 +218,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
             assert len(truth_hist[key]) == len(backend_Sigma_hist[key])
 
         for i in range(len(truth_hist[key])):
+            assert truth_hist[key][i].shape[1] == time_hist.shape[0]
             assert truth_hist[key][i].shape[0] == 5
             assert truth_hist[key][i].ndim == 2
             assert truth_hist[key][i].shape == ekf_mu_hist[key][i].shape
