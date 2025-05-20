@@ -20,7 +20,7 @@ class Vehicle:
     Class for single simulation vehicle. Contains it's own sensor and filters and 'dynamics',
     like you would expect an actual vehicle to have.
     """
-    def __init__(self, initial_position, final_position, initial_sigmas, trajectory_type):
+    def __init__(self, initial_position, final_position, initial_sigmas, trajectory_type, velocity):
         """
         Parameters:
         initial_position: np.array, shape (2, 1)
@@ -31,6 +31,8 @@ class Vehicle:
             Initial uncertainty of the vehicle's estimate, in standard deviations.
         trajectory_type: TrajectoryType
             Type of trajectory to follow.
+        velocity: float
+            Velocity to travel trajectory
         """
         assert initial_position.shape == (2, 1)
         assert final_position.shape == (2, 1)
@@ -38,11 +40,10 @@ class Vehicle:
         assert trajectory_type in TrajectoryType
 
         # Generate trajectory
-        V_TRAJECTORY = 15  # m/s
         IMU_FREQUENCY = 100  # 1/s
         self._DT = 1 / IMU_FREQUENCY
         total_distance = np.linalg.norm(final_position - initial_position)
-        self._total_steps = int(total_distance / V_TRAJECTORY * IMU_FREQUENCY)
+        self._total_steps = int(total_distance / velocity * IMU_FREQUENCY)
         if trajectory_type == TrajectoryType.LINE:
             trajectory = line_trajectory(self._total_steps,
                                          initial_position,
@@ -167,7 +168,7 @@ if __name__ == "__main__":
     initial_sigmas = np.array([0.5, 0.5, 1e-2, 0.1, 0.1]).reshape(-1, 1)
     global_sigmas = np.array([0.5, 0.5, 1e15]).reshape(-1, 1)
 
-    vehicle = Vehicle(initial_position, final_position, initial_sigmas, trajectory_type)
+    vehicle = Vehicle(initial_position, final_position, initial_sigmas, trajectory_type, 15)
 
     while vehicle.step() is not None:
         if vehicle.get_current_time() % 50 == 0 and vehicle.get_current_time() != 0:
