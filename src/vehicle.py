@@ -173,6 +173,10 @@ if __name__ == "__main__":
                   covariances=[Covariance(vehicle._ekf.Sigma[:2, :2], vehicle._ekf.mu[:2],
                                           color="b")]
     )
-    plot_trajectory_error({"Vehicle 1": [mu_hist]}, {"Vehicle 1": [truth_hist]},
-                          {"Vehicle 1": [Sigma_hist]})
+    plot_trajectory_error(
+        np.arange(0, truth_hist.shape[1]),
+        {"Vehicle 1": [truth_hist]},
+        {"Vehicle 1": [mu_hist]},
+        {"Vehicle 1": [Sigma_hist]},
+    )
 
