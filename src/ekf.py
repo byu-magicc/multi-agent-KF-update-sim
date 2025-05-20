@@ -333,28 +333,26 @@ if __name__ == "__main__":
 
     trajectory = sine_trajectory(num_steps, np.array([[0, 0]]).T, np.array([[100, 100]]).T, 5, 2)
     time_hist = np.linspace(0, dt*(trajectory.shape[1] - 1), trajectory.shape[1])
+    v_0 = ((trajectory[:2, 1] - trajectory[:2, 0]) / dt).reshape(-1, 1)
 
-    imu_data, v_b = get_imu_data(trajectory, imu_sigmas, dt)
+    imu_data, v_truth = get_imu_data(trajectory, imu_sigmas, v_0, dt)
     theta = trajectory[2, 0]
-    R = np.array([[np.cos(theta), -np.sin(theta)],
-                  [np.sin(theta), np.cos(theta)]]).squeeze()
-    v = R @ np.array([[v_b], [0]])
 
-    mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy(), v])
+    mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy(), v_0])
     Sigma_0 = np.eye(5) * 1e-15
     Sigma_global = np.diag([0.1, 0.1, 0.05])**2
 
-    mu_hist = {"Vehicle 1": [mu_0[:3]]}
-    truth_hist = {"Vehicle 1": [trajectory]}
-    Sigma_hist = {"Vehicle 1": [Sigma_0.copy()[:3, :3]]}
+    mu_hist = {"Vehicle 1": [mu_0]}
+    truth_hist = {"Vehicle 1": [np.vstack((trajectory, v_truth))]}
+    Sigma_hist = {"Vehicle 1": [Sigma_0.copy()]}
 
     ekf = EKF(mu_0, Sigma_0, imu_sigmas, dt)
 
     for i in range(num_steps - 1):
         ekf.propagate(imu_data[:, i].reshape(-1, 1))
 
-        mu_hist["Vehicle 1"].append(ekf.mu.copy()[:3])
-        Sigma_hist["Vehicle 1"].append(ekf.Sigma.copy()[:3, :3])
+        mu_hist["Vehicle 1"].append(ekf.mu.copy())
+        Sigma_hist["Vehicle 1"].append(ekf.Sigma.copy())
 
         if i*dt % 50 == 0 and i != 0:
             global_meas = trajectory[:3, i + 1].reshape(-1, 1)

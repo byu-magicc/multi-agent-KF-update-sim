@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_imu_data(trajectory, noise_std, dt):
+def get_imu_data(trajectory, noise_std, v_0, dt):
     """
     Get simulated IMU data from the ground truth states.
 
@@ -13,6 +13,7 @@ def get_imu_data(trajectory, noise_std, dt):
     Parameters:
     trajectory (np.array): 3xn Numpy array of full trajectory. [[x, y, theta], ...].T
     noise_std (np.array): Standard deviation of the noise for the IMU data. [[acc_x, acc_y, theta_dot]].T
+    v_0 (np.array): 2x1 Numpy array of velocity at time 0. [[v_x, v_y]].T
     dt (float): Delta time step.
 
     Returns:
@@ -23,15 +24,14 @@ def get_imu_data(trajectory, noise_std, dt):
     assert trajectory.ndim == 2
     assert trajectory.shape[1] > 1
     assert noise_std.shape == (3, 1)
+    assert v_0.shape == (2, 1)
     assert dt > 0
 
-    # Initialize the array with zero acceleration in first time step
-    v_0 = ((trajectory[:2, 1] - trajectory[:2, 0]) / dt).reshape(-1, 1)
-    theta_dot_0 = (trajectory[2, 1] - trajectory[2, 0]) / dt
     v_t = v_0.copy()
-    a_array = [np.array([[0, 0, theta_dot_0]], dtype=float).T]
+    a_array = []
+    v_truth_array = [v_0]
 
-    for t in range(2, trajectory.shape[1]):
+    for t in range(1, trajectory.shape[1]):
         x_t1 = trajectory[:, t].reshape(-1, 1)
         x_t = trajectory[:, t - 1].reshape(-1, 1)
 
@@ -46,12 +46,13 @@ def get_imu_data(trajectory, noise_std, dt):
         a_t_body = rot.T @ a_t_global
 
         a_array.append(np.array([a_t_body[0], a_t_body[1], theta_dot]))
+        v_truth_array.append(v_t.copy())
 
     # Add noise
     a_array = np.hstack(a_array)
     a_array += np.random.normal(0, noise_std, a_array.shape)
 
-    return a_array, np.linalg.norm(v_0)
+    return a_array, np.hstack(v_truth_array)
 
 
 def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_desired):
@@ -95,14 +96,15 @@ if __name__ == "__main__":
     trajectory = line_trajectory(num_steps, x, np.array([[10, 10]]).T)
     trajectory = arc_trajectory(num_steps, x, np.array([[10, 0]]).T, np.deg2rad(15))
     trajectory = sine_trajectory(num_steps, x, np.array([[100, 100]]).T, 5, 2)
-    imu_data, v = get_imu_data(trajectory, noise_std, dt)
+
+    v_0 = ((trajectory[:2, 1] - trajectory[:2, 0]) / dt).reshape(-1, 1)
+
+    imu_data, _ = get_imu_data(trajectory, noise_std, v_0, dt)
 
     x = trajectory[:, 0].reshape(-1, 1).copy()
     x_traj = [x.copy()]
 
-    R = np.array([[np.cos(x[2]), -np.sin(x[2])],
-                  [np.sin(x[2]), np.cos(x[2])]]).squeeze()
-    v = R @ np.array([[v], [0]])
+    v = v_0.copy()
 
     for i in range(num_steps - 1):
         R = np.array([[np.cos(x[2]), -np.sin(x[2])],

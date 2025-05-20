@@ -181,13 +181,13 @@ def plot_trajectory_error(time_hist: np.ndarray,
     Parameters:
     hist_indices: np.array of floats (n)
         Time of elements in history arrays.
-    truth_hist: Dictionary of List of np.arrays (3 x n)
+    truth_hist: Dictionary of List of np.arrays (5 x n)
         Ground truth for every timestep for any number of iterations, where the key is the vehicle
         name.
-    ekf_mu_hist: Dictionary of List of np.arrays (3 x n)
+    ekf_mu_hist: Dictionary of List of np.arrays (5 x n)
         State estimate of the EKF for every timestep for any number of iterations, where the key is
         the vehicle name.
-    ekf_Sigma_hist: Dictionary of List of np.arrays (n x 3 x 3)
+    ekf_Sigma_hist: Dictionary of List of np.arrays (n x 5 x 5)
         Covariance of EKF estimate for every timestep for any number of iterations, where the key
         is the vehicle name.
     backend_mu_hist: Dictionary of List of np.arrays (3 x n)
@@ -217,13 +217,14 @@ def plot_trajectory_error(time_hist: np.ndarray,
             assert len(truth_hist[key]) == len(backend_Sigma_hist[key])
 
         for i in range(len(truth_hist[key])):
-            assert truth_hist[key][i].shape[0] == 3
+            assert truth_hist[key][i].shape[0] == 5
             assert truth_hist[key][i].ndim == 2
             assert truth_hist[key][i].shape == ekf_mu_hist[key][i].shape
             assert truth_hist[key][i].shape[1] == ekf_Sigma_hist[key][i].shape[0]
-            assert ekf_Sigma_hist[key][i].shape[1:] == (3, 3)
+            assert ekf_Sigma_hist[key][i].shape[1:] == (5, 5)
             if plot_backend:
-                assert truth_hist[key][i].shape == backend_mu_hist[key][i].shape
+                assert backend_mu_hist[key][i].shape[0] == 3
+                assert truth_hist[key][i].shape[1] == backend_mu_hist[key][i].shape[1]
                 assert truth_hist[key][i].shape[1] == backend_Sigma_hist[key][i].shape[0]
                 assert backend_Sigma_hist[key][i].shape[1:] == (3, 3)
 
@@ -258,7 +259,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
             backend_residuals = []
             nees = []
             for i in range(len(backend_mu_hist[key])):
-                residuals = backend_mu_hist[key][i] - truth_hist[key][i]
+                residuals = backend_mu_hist[key][i] - truth_hist[key][i][:3]
                 backend_residuals.append(residuals)
 
                 Sigmas = backend_Sigma_hist[key][i]
@@ -275,7 +276,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
     # Covariance only plots
     if sigma_only:
         # Error plots
-        fig, axs = plt.subplots(4, len(ekf_mu_hist.keys()), figsize=(16, 12))
+        fig, axs = plt.subplots(6, len(ekf_mu_hist.keys()), figsize=(16, 12))
         if len(ekf_mu_hist.keys()) == 1:
             axs = np.expand_dims(axs, axis=1)
         column_idx = 0
@@ -301,20 +302,31 @@ def plot_trajectory_error(time_hist: np.ndarray,
             if plot_backend:
                 axs[2, column_idx].plot(time_hist, backend_error_sigma[key][2, :], color='m')
 
-            # NEES
-            axs[3, column_idx].plot(time_hist, ekf_error_nees[key], color='g')
-            axs[3, column_idx].set_xlabel('Distance (m)')
-            axs[3, column_idx].axhline(3.0, color='k', linestyle='--')
+            # X Velocity
+            axs[3, column_idx].plot(time_hist, ekf_error_sigma[key][3, :], color='g')
             axs[3, column_idx].grid()
+
+            # Y Velocity
+            axs[4, column_idx].plot(time_hist, ekf_error_sigma[key][4, :], color='g')
+            axs[4, column_idx].grid()
+
+            # NEES
+            axs[5, column_idx].axhline(5.0, color='g', linestyle='--')
+            axs[5, column_idx].plot(time_hist, ekf_error_nees[key], color='g')
+            axs[5, column_idx].set_xlabel('Time (s)')
+            axs[5, column_idx].grid()
             if plot_backend:
-                axs[3, column_idx].plot(time_hist, backend_error_nees[key], color='m')
+                axs[5, column_idx].axhline(3.0, color='m', linestyle='--')
+                axs[5, column_idx].plot(time_hist, backend_error_nees[key], color='m')
 
             # Add ylabels and legend
             if column_idx == 0:
                 axs[0, column_idx].set_ylabel('X Error (m)')
                 axs[1, column_idx].set_ylabel('Y Error (m)')
                 axs[2, column_idx].set_ylabel('Theta Error (rad)')
-                axs[3, column_idx].set_ylabel('NEES')
+                axs[3, column_idx].set_ylabel('X Velocity Error (m/s)')
+                axs[4, column_idx].set_ylabel('Y Velocity Error (m/s)')
+                axs[5, column_idx].set_ylabel('NEES')
                 axs[0, column_idx].legend()
 
             column_idx += 1
@@ -332,7 +344,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
         return
 
     # Create full plot
-    fig, axs = plt.subplots(3, len(ekf_mu_hist.keys()), figsize=(16, 12))
+    fig, axs = plt.subplots(5, len(ekf_mu_hist.keys()), figsize=(16, 12))
     if len(ekf_mu_hist.keys()) == 1:
         axs = np.expand_dims(axs, axis=1)
 
@@ -346,7 +358,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
             if plot_backend:
                 curr_backend_mu = backend_mu_hist[key][i]
                 curr_backend_sigma = np.sqrt(np.diagonal(backend_Sigma_hist[key][i], axis1=1, axis2=2).T)
-                backend_error = curr_backend_mu - curr_truth
+                backend_error = curr_backend_mu - curr_truth[:3]
 
             # X position
             if i == 0:
@@ -391,17 +403,31 @@ def plot_trajectory_error(time_hist: np.ndarray,
                 axs[2, column_idx].plot(time_hist, num_sigma*curr_backend_sigma[2, :], color='c')
                 axs[2, column_idx].plot(time_hist, -num_sigma*curr_backend_sigma[2, :], color='c')
 
+            # X Velocity
+            axs[3, column_idx].plot(time_hist, ekf_error[3, :], color='r', alpha=alpha)
+            axs[3, column_idx].plot(time_hist, num_sigma*curr_ekf_sigma[3, :], color='b')
+            axs[3, column_idx].plot(time_hist, -num_sigma*curr_ekf_sigma[3, :], color='b')
+
+            # Y Velocity
+            axs[4, column_idx].plot(time_hist, ekf_error[4, :], color='r', alpha=alpha)
+            axs[4, column_idx].plot(time_hist, num_sigma*curr_ekf_sigma[4, :], color='b')
+            axs[4, column_idx].plot(time_hist, -num_sigma*curr_ekf_sigma[4, :], color='b')
+
             # Formatting
             if i == 0:
                 axs[0, column_idx].set_title(f'{key}')
                 axs[0, column_idx].grid()
                 axs[1, column_idx].grid()
-                axs[2, column_idx].set_xlabel('Distance (m)')
                 axs[2, column_idx].grid()
+                axs[3, column_idx].grid()
+                axs[4, column_idx].grid()
+                axs[4, column_idx].set_xlabel('Time (s)')
             if column_idx == 0:
                 axs[0, column_idx].set_ylabel('X Error (m)')
                 axs[1, column_idx].set_ylabel('Y Error (m)')
                 axs[2, column_idx].set_ylabel('Theta Error (rad)')
+                axs[3, column_idx].set_ylabel('X Velocity Error (m/s)')
+                axs[4, column_idx].set_ylabel('Y Velocity Error (m/s)')
                 axs[0, column_idx].legend()
 
         column_idx += 1
@@ -462,12 +488,12 @@ if __name__ == "__main__":
     plot_overview(trajectories=poses, lines=lines, markers=markers, covariances=covariances)
 
     time_hist = np.array([0.0, 2.5])
-    truth_hist = {"Vehicle 1": [np.array([[0, 0, 0], [1, 1, 1]]).T,
-                                np.array([[0, 0, 0], [-1, -1, -1]]).T]}
-    ekf_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0], [0.9, 0.9, 0.9]]).T,
-                                 np.array([[0, 0, 0], [-0.9, -0.9, -0.9]]).T]}
-    ekf_Sigma_hist = {"Vehicle 1": [np.array([np.eye(3)*0.1, np.eye(3)*0.2]),
-                                    np.array([np.eye(3)*0.1, np.eye(3)*0.2])]}
+    truth_hist = {"Vehicle 1": [np.array([[0, 0, 0, 0, 0], [1, 1, 1, 1, 1]]).T,
+                                np.array([[0, 0, 0, 0, 0], [-1, -1, -1, -1, -1]]).T]}
+    ekf_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0, 0, 0], [0.9, 0.9, 0.9, 0.9, 0.9]]).T,
+                                 np.array([[0, 0, 0, 0, 0], [-0.9, -0.9, -0.9, -0.9, -0.9]]).T]}
+    ekf_Sigma_hist = {"Vehicle 1": [np.array([np.eye(5)*0.1, np.eye(5)*0.2]),
+                                    np.array([np.eye(5)*0.1, np.eye(5)*0.2])]}
     backend_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0], [0.85, 0.85, 0.85]]).T,
                                      np.array([[0, 0, 0], [-0.85, -0.85, -0.85]]).T]}
     backend_Sigma_hist = {"Vehicle 1": [np.array([np.eye(3)*0.08, np.eye(3)*0.16]),
