@@ -12,7 +12,10 @@ from simulator import Simulation
 def run_simulation(args):
     thread_id, num_steps_in_results, plot_fg_results, trajectory_preset = args
     np.random.seed(thread_id)
-    return Simulation(trajectory_preset).run(num_steps_in_results, plot_fg_results)
+    try:
+        return Simulation(trajectory_preset).run(num_steps_in_results, plot_fg_results)
+    except Exception as e:
+        print(f'Iteration {thread_id} failed, reason: {e}')
 
 
 def main(num_instances: int, plot_fg_results: bool, trajectory_preset: int):
@@ -31,6 +34,8 @@ def main(num_instances: int, plot_fg_results: bool, trajectory_preset: int):
             desc="Simulating"
         ):
             results.append(result)
+
+    results = [item for item in results if item is not None]
 
     num_vehicles = len(Simulation(0).vehicles)
 
