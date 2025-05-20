@@ -1,33 +1,57 @@
 import numpy as np
 
 
-def get_odom_data(trajectory, odom_sigmas):
+def get_imu_data(trajectory, noise_std, dt):
     """
-    Get simulated odometry from the ground truth states.
+    Get simulated IMU data from the ground truth states.
+
+    x_t = x_t-1 + v_t-1 * dt + 0.5 * a_t-1 * dt^2
+    a_t = 2 * (x_t+1 - x_t - v_t * dt) / dt^2
+    v_t = v_t-1 + a_t-1 * dt
+    theta_dot_t = (theta_t+1 - theta_t) / dt
 
     Parameters:
     trajectory (np.array): 3xn Numpy array of full trajectory. [[x, y, theta], ...].T
-    odom_sigmas (np.array): 3x1 Numpy array of odometry noise standard deviations.
-        [[sigma_x, sigma_y, sigma_theta]].T
+    noise_std (np.array): Standard deviation of the noise for the IMU data. [[acc_x, acc_y, theta_dot]].T
+    dt (float): Delta time step.
 
     Returns:
-    np.array: Odometry data at every timestep (excluding the first). [[delta_x, delta_y, delta_theta]], ...].T
+    np.array: IMU data at every timestep (minus the last). [[acc_x, acc_y, theta_dot], ...].T
+    np.array: Initial forward velocity assumed at the first timestep.
     """
     assert trajectory.shape[0] == 3
     assert trajectory.ndim == 2
     assert trajectory.shape[1] > 1
+    assert noise_std.shape == (3, 1)
+    assert dt > 0
 
-    odom_measurements = []
-    for t in range(1, trajectory.shape[1]):
-        R = np.array([[np.cos(trajectory[2, t-1]), -np.sin(trajectory[2, t-1])],
-                      [np.sin(trajectory[2, t-1]), np.cos(trajectory[2, t-1])]])
-        delta_xy = R.T @ (trajectory[:2, t] - trajectory[:2, t-1]).reshape(-1, 1)
-        odom = np.vstack([delta_xy, trajectory[2, t] - trajectory[2, t-1]])
-        odom += np.random.normal(0, odom_sigmas)
-        odom_measurements.append(odom)
-    odom_measurements = np.hstack(odom_measurements)
+    # Initialize the array with zero acceleration in first time step
+    v_0 = ((trajectory[:2, 1] - trajectory[:2, 0]) / dt).reshape(-1, 1)
+    theta_dot_0 = (trajectory[2, 1] - trajectory[2, 0]) / dt
+    v_t = v_0.copy()
+    a_array = [np.array([[0, 0, theta_dot_0]], dtype=float).T]
 
-    return odom_measurements
+    for t in range(2, trajectory.shape[1]):
+        x_t1 = trajectory[:, t].reshape(-1, 1)
+        x_t = trajectory[:, t - 1].reshape(-1, 1)
+
+        # Calculate the acceleration in the global frame
+        theta_dot = (x_t1[2] - x_t[2]) / dt
+        a_t_global = 2 * (x_t1[:2] - x_t[:2] - v_t * dt) / dt ** 2
+        # Timestep here
+        v_t += a_t_global[:2] * dt
+
+        # Rotate the acceleration to the body frame
+        rot = np.array([[np.cos(x_t[2]), -np.sin(x_t[2])], [np.sin(x_t[2]), np.cos(x_t[2])]]).squeeze()
+        a_t_body = rot.T @ a_t_global
+
+        a_array.append(np.array([a_t_body[0], a_t_body[1], theta_dot]))
+
+    # Add noise
+    a_array = np.hstack(a_array)
+    a_array += np.random.normal(0, noise_std, a_array.shape)
+
+    return a_array, np.linalg.norm(v_0)
 
 
 def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_desired):
@@ -61,28 +85,36 @@ if __name__ == "__main__":
     from plotters import plot_overview, Trajectory
     from trajectories import line_trajectory, arc_trajectory, sine_trajectory
 
-    num_steps = 100
-    odom_sigmas = np.array([0.1, 0.1, np.deg2rad(1)]).reshape(-1, 1)
+    duration = 100
+    dt = 1.0 / 400
+    num_steps = int(duration / dt)
+    noise_std = np.array([[0., 0., np.deg2rad(0.)]]).T
 
     x = np.array([[0, 0]], dtype=float).T
 
     trajectory = line_trajectory(num_steps, x, np.array([[10, 10]]).T)
     trajectory = arc_trajectory(num_steps, x, np.array([[10, 0]]).T, np.deg2rad(15))
     trajectory = sine_trajectory(num_steps, x, np.array([[100, 100]]).T, 5, 2)
-    odom_data = get_odom_data(trajectory, odom_sigmas)
+    imu_data, v = get_imu_data(trajectory, noise_std, dt)
 
     x = trajectory[:, 0].reshape(-1, 1).copy()
     x_traj = [x.copy()]
 
+    R = np.array([[np.cos(x[2]), -np.sin(x[2])],
+                  [np.sin(x[2]), np.cos(x[2])]]).squeeze()
+    v = R @ np.array([[v], [0]])
+
     for i in range(num_steps - 1):
         R = np.array([[np.cos(x[2]), -np.sin(x[2])],
                       [np.sin(x[2]), np.cos(x[2])]]).squeeze()
-        x[:2] += R @ odom_data[:2, i].reshape(-1, 1)
-        x[2] += odom_data[2, i]
+
+        x[:2] += v * dt + 0.5 * R @ imu_data[:2, i].reshape(-1, 1) * dt ** 2
+        x[2] += imu_data[2, i] * dt
+        v += R @ imu_data[:2, i].reshape(-1, 1) * dt
 
         x_traj.append(x.copy())
 
-        print(f"Step {i}: x = {x.T}, odom = {odom_data[:, i]}")
+        print(f"Step {i}: x = {x.T}, v = {v.T}, imu = {imu_data[:, i]}")
 
     x_traj = np.hstack(x_traj)
 
