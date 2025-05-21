@@ -71,6 +71,10 @@ class Vehicle:
         Sigma_0 = np.diag(initial_sigmas.flatten()**2)
         self._ekf = EKF(mu_0, Sigma_0, IMU_SIGMAS, self._DT)
 
+        # Initialize keyframe EKF
+        self._keyframe_ekf = EKF(mu_0.copy(), Sigma_0.copy(), IMU_SIGMAS, self._DT)
+        self._keyframe_ekf.reset_state()
+
         # Initialize history
         self._mu_hist = [mu_0]
         self._truth_hist = np.vstack((trajectory, v_truth))
@@ -94,6 +98,7 @@ class Vehicle:
             return None
 
         self._ekf.propagate(self._imu_data[:, self._current_step].reshape(-1, 1))
+        self._keyframe_ekf.propagate(self._imu_data[:, self._current_step].reshape(-1, 1))
         self._current_step += 1
 
         self._mu_hist.append(self._ekf.mu.copy())
@@ -157,6 +162,12 @@ class Vehicle:
             True if vehicle is not at end of trajectory, false otherwise.
         """
         return self._current_step < self._imu_data.shape[1]
+
+    def keyframe_reset(self):
+        """
+        Resets keyframe EKF and returns the keyframe state and covariance prior to the reset.
+        """
+        return self._keyframe_ekf.reset_state()
 
 
 if __name__ == "__main__":

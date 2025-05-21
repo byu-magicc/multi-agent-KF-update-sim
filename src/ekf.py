@@ -318,6 +318,33 @@ class EKF:
         self.mu = self.mu + K_t * (z_t - self.h_range(self.mu, x_b))
         self.Sigma = (np.eye(5) - K_t @ H_t) @ self.Sigma
 
+    def reset_state(self):
+        """
+        Resets the position and heading states and associated covariances to 0 and returns latest
+        values before resetting. Useful for keyframe resets.
+
+        Returns:
+        current_mu: np.array, shape (5, 1)
+            Current state estimate before reset.
+        current_Sigma: np.array, shape (5, 5)
+            Current covariance matrix before reset.
+        """
+
+        theta = self.mu.item(2)
+        R = np.array([[np.cos(theta), -np.sin(theta)],
+                      [np.sin(theta), np.cos(theta)]])
+
+        current_mu = self.mu.copy()
+        current_Sigma = self.Sigma.copy()
+
+        self.mu[:3] = 0.0
+        self.mu[3:] = R.T @ self.mu[3:]
+
+        self.Sigma = np.eye(5) * 1e-9
+        self.Sigma[3:, 3:] = R.T @ current_Sigma[3:, 3:].copy() @ R
+
+        return current_mu[:3], current_Sigma[:3, :3]
+
 
 if __name__ == "__main__":
     from measurements import get_imu_data
