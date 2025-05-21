@@ -82,62 +82,63 @@ def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_d
 
 
 # TODO: Does this really belong here?
-def get_relative_pose(pose_0, pose_1, Sigma_0, Sigma_1):
+def get_relative_pose(pose_a, pose_b, Sigma_a, Sigma_b):
     """
-    Get transformation from vehicle 0 to vehicle 1 with the correct transformation uncertainty,
-    in frame of vehicle 0.
+    Get transformation from vehicle a to vehicle b with the correct transformation uncertainty,
+    in frame of vehicle a.
 
-    pose_0: np.array, shape (3, 1)
+    Params:
+    pose_a: np.array, shape (3, 1)
         Pose of vehicle 0. [[x, y, theta]].T
-    pose_1: np.array, shape (3, 1)
+    pose_b: np.array, shape (3, 1)
         Pose of vehicle 1. [[x, y, theta]].T
-    Sigma_0: np.array, shape (3, 3)
+    Sigma_a: np.array, shape (3, 3)
         Covariance of vehicle 0.
-    Sigma_1: np.array, shape (3, 3)
+    Sigma_b: np.array, shape (3, 3)
         Covariance of vehicle 1.
 
     Returns: (np.ndarray(3, 1), (np.ndarray(3, 3))
         Transformation and covariance
     """
-    assert pose_0.shape == (3, 1)
-    assert pose_1.shape == (3, 1)
-    assert Sigma_0.shape == (3, 3)
-    assert Sigma_1.shape == (3, 3)
+    assert pose_a.shape == (3, 1)
+    assert pose_b.shape == (3, 1)
+    assert Sigma_a.shape == (3, 3)
+    assert Sigma_b.shape == (3, 3)
 
-    # Get the transformation from vehicle_0 to vehicle_1, in vehicle_0 frame
-    theta_0 = pose_0.item(2)
-    R = np.array([[np.cos(theta_0), -np.sin(theta_0), 0],
-                  [np.sin(theta_0),  np.cos(theta_0), 0],
+    # Get the transformation from vehicle a to vehicle b, in vehicle a frame
+    theta_a = pose_a.item(2)
+    R = np.array([[np.cos(theta_a), -np.sin(theta_a), 0],
+                  [np.sin(theta_a),  np.cos(theta_a), 0],
                   [              0,                0, 1]])
-    T_0_1 = R.T @ (pose_1 - pose_0)
+    T_a_b = R.T @ (pose_b - pose_a)
 
     # Get the covariance of the two poses, in global frame
     joint_Sigma = np.zeros((6, 6))
-    joint_Sigma[:3, :3] = Sigma_0
-    joint_Sigma[3:, 3:] = Sigma_1
+    joint_Sigma[:3, :3] = Sigma_a
+    joint_Sigma[3:, 3:] = Sigma_b
 
     # Get the jacobian of the tail to tail transformation
-    theta_0 = pose_0.item(2)
-    x_1_0 = pose_1.item(0) - pose_0.item(0)
-    y_1_0 = pose_1.item(1) - pose_0.item(1)
-    J = np.array([[-np.cos(theta_0),
-                   -np.sin(theta_0),
-                   -np.sin(theta_0)*x_1_0 + np.cos(theta_0)*y_1_0,
-                   np.cos(theta_0),
-                   np.sin(theta_0),
+    theta_a = pose_a.item(2)
+    x_b_a = pose_b.item(0) - pose_a.item(0)
+    y_b_a = pose_b.item(1) - pose_a.item(1)
+    J = np.array([[-np.cos(theta_a),
+                   -np.sin(theta_a),
+                   -np.sin(theta_a)*x_b_a + np.cos(theta_a)*y_b_a,
+                   np.cos(theta_a),
+                   np.sin(theta_a),
                    0],
-                  [np.sin(theta_0),
-                   -np.cos(theta_0),
-                   -np.cos(theta_0)*x_1_0 - np.sin(theta_0)*y_1_0,
-                   -np.sin(theta_0),
-                   np.cos(theta_0),
+                  [np.sin(theta_a),
+                   -np.cos(theta_a),
+                   -np.cos(theta_a)*x_b_a - np.sin(theta_a)*y_b_a,
+                   -np.sin(theta_a),
+                   np.cos(theta_a),
                    0],
                   [0, 0, -1, 0, 0, 1]])
 
     # Compute the uncertainty of the transformation
     Sigma = J @ joint_Sigma @ J.T
 
-    return T_0_1, Sigma
+    return T_a_b, Sigma
 
 
 if __name__ == "__main__":

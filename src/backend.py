@@ -30,21 +30,21 @@ class Odometry:
     """
     Struct for storing odometry measurements.
     """
-    def __init__(self, vehicle: str, mean: np.ndarray, Sigmas: np.ndarray):
+    def __init__(self, vehicle: str, mean: np.ndarray, Sigma: np.ndarray):
         """
         vehicle: str
             The name of the vehicle.
         mean: np.ndarray (3, 1)
             The mean of the odometry. x, y, theta.
-        Sigmas: np.ndarray (3, 1)
-            The standard deviations of the odometry.
+        Sigmas: np.ndarray (3, 3)
+            The covariance of the odometry.
         """
         assert mean.shape == (3, 1)
-        assert Sigmas.shape == (3, 1)
+        assert Sigma.shape == (3, 3)
 
         self.vehicle = vehicle
         self.mean = mean
-        self.Sigmas = Sigmas
+        self.Sigma = Sigma
 
 
 class Global:
@@ -140,7 +140,7 @@ class Backend:
                 self.vehicle_pose_ids[odometry.vehicle][-1],
                 self.next_id,
                 gtsam.Pose2(*odometry.mean),
-                gtsam.noiseModel.Diagonal.Sigmas(odometry.Sigmas.flatten())
+                gtsam.noiseModel.Gaussian.Covariance(odometry.Sigma)
             )
         )
 
@@ -383,28 +383,28 @@ if __name__ == "__main__":
     from matplotlib.patches import Ellipse
 
     prior_noise = np.array([[0.1], [0.1], [0.1]])
-    odometry_noise = np.array([[0.2], [0.2], [0.1]])
+    odometry_covariance = np.diag([0.2, 0.2, 0.1])**2
     global_noise = np.array([[0.1], [0.1], [np.inf]])
     range_noise = 0.1
 
     priors = [
         Prior("A", np.array([[0], [0], [0]]), prior_noise),
-        Prior("B", np.array([[0], [5], [0]]), prior_noise),
+        Prior("B", np.array([[0], [5], [np.pi / 4]]), prior_noise),
     ]
     odometries_1 = [
-        Odometry("A", np.array([[2], [0], [0]]), odometry_noise),
-        Odometry("A", np.array([[2], [0], [0]]), odometry_noise),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_noise),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_noise),
+        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
+        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
+        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
+        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
     ]
     range_measurements = [
         Range("A", "B", 6, range_noise),
     ]
     odometries_2 = [
-        Odometry("A", np.array([[2], [0], [0]]), odometry_noise),
-        Odometry("A", np.array([[2], [0], [0]]), odometry_noise),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_noise),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_noise),
+        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
+        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
+        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
+        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
     ]
     globals = [
         Global("A", np.array([[8], [0], [0]]), global_noise),
