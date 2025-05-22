@@ -1,6 +1,6 @@
 import numpy as np
 
-from backend import Backend, Prior, Odometry, Global, Range
+from backend import Backend, Prior, IMU
 from measurements import get_pseudo_global_measurement, get_relative_pose
 from vehicle import Vehicle, TrajectoryType
 
@@ -64,11 +64,18 @@ class Simulation:
         self.active_vehicles = [True] * len(self.vehicles)
 
         # Create backend
-        priors = [
-            Prior(f"{i}", self.vehicles[i]._ekf.mu[:3], INITIAL_UNCERTAINTY_STD[:3])
-            for i in range(len(INITIAL_POSITIONS))
-        ]
-        self.backend = Backend(priors)
+        priors = []
+        for i, vehicle in enumerate(self.vehicles):
+            pos = vehicle._ekf.mu[:3].copy()
+            pos_sigmas = INITIAL_UNCERTAINTY_STD[:3].copy()
+            v_0 = vehicle._ekf.mu[3:].copy()
+            v_sigmas = INITIAL_UNCERTAINTY_STD[3:].copy()
+            priors.append(Prior(
+                f"{i}",
+                pos, pos_sigmas,
+                v_0, v_sigmas,
+            ))
+        self.backend = Backend(priors, self.vehicles[0].IMU_SIGMAS, self.vehicles[0]._DT)
 
     def run(self, num_steps_in_results=100, compute_backend=False):
         """
@@ -118,13 +125,13 @@ class Simulation:
             for i, vehicle in enumerate(self.vehicles):
                 if self.active_vehicles[i]:
                     # Propagate ekf
+                    imu_meas = vehicle._imu_data[:, vehicle._current_step].reshape(-1, 1)
+                    self.backend.add_imu(IMU(f"{i}", imu_meas))
+
                     curr_ekf_mu, curr_ekf_Sigma = vehicle.step()
 
                     # Apply simulated global measurement
                     if vehicle.get_current_time() in self.GLOBAL_STEP:
-                        keyframe_mu, keyframe_Sigma = self.vehicles[i].keyframe_reset()
-                        self.backend.add_odometry(Odometry(f'{i}', keyframe_mu, keyframe_Sigma))
-
                         if i == 0:
                             pass
 
@@ -204,21 +211,14 @@ class Simulation:
                         ekf_hist_mu[i].append(curr_ekf_mu)
                         ekf_hist_Sigma[i].append(curr_ekf_Sigma)
 
-                        #if compute_backend:
-                        #    backend_mu, backend_Sigma = self.backend.get_vehicle_info(f"{i}")
-                        #    backend_hist_mu[i].append(backend_mu)
-                        #    backend_hist_Sigma[i].append(backend_Sigma)
+                        if compute_backend:
+                            backend_mu, backend_Sigma = self.backend.get_vehicle_info(f"{i}")
+                            backend_hist_mu[i].append(backend_mu)
+                            backend_hist_Sigma[i].append(backend_Sigma)
 
                     # Stop simulation if completed
                     if not vehicle.is_active():
                         self.active_vehicles[i] = False
-                        if compute_backend:
-                            keyframe_mu, keyframe_Sigma = self.vehicles[i].keyframe_reset()
-                            self.backend.add_odometry(Odometry(f'{i}', keyframe_mu, keyframe_Sigma))
-
-                            backend_mu, backend_Sigma = self.backend.get_vehicle_info(f"{i}")
-                            backend_hist_mu[i].append(backend_mu)
-                            backend_hist_Sigma[i].append(backend_Sigma)
 
         for i, vehicle in enumerate(self.vehicles):
             truth_hist[i] = np.hstack(truth_hist[i])
@@ -266,7 +266,6 @@ if __name__ == "__main__":
         backend_mu_hist[i] = [backend_mu_hist_array[i]]
         backend_Sigma_hist[i] = [backend_Sigma_hist_array[i]]
 
-    print(simulation.backend.graph)
     plot_overview(poses, covariances)
     plot_trajectory_error(time_hist, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                           backend_Sigma_hist, plot_backend=False)
