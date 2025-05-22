@@ -9,91 +9,86 @@ class Prior:
     """
     Struct for storing priors.
     """
-    def __init__(self, vehicle: str, mean: np.ndarray, sigmas: np.ndarray):
+    def __init__(self, vehicle: str, prior_mean: np.ndarray, prior_sigmas: np.ndarray,
+                 velocity_mean: np.ndarray, velocity_sigmas: np.ndarray):
         """
+        Params:
         vehicle: str
             The name of the vehicle.
-        mean: np.ndarray (3, 1)
-            The mean of the prior. x, y, theta.
-        sigmas: np.ndarray (3, 1)
-            The standard deviations of the prior.
+        prior_mean: np.ndarray(3,1)
+            The mean of the prior pose (x, y, theta).
+        prior_sigmas: np.ndarray(3,1)
+            The standard deviation of the prior pose (x, y, theta).
+        velocity_mean: np.ndarray(2,1)
+            The mean of the prior velocity (vx, vy).
+        velocity_sigmas: np.ndarray(2,1)
+            The standard deviation of the prior velocity (vx, vy).
         """
-        assert mean.shape == (3, 1)
-        assert sigmas.shape == (3, 1)
+        assert prior_mean.shape == (3, 1)
+        assert prior_sigmas.shape == (3, 1)
+        assert velocity_mean.shape == (2, 1)
+        assert velocity_sigmas.shape == (2, 1)
 
         self.vehicle = vehicle
-        self.mean = mean
-        self.sigmas = sigmas
+
+        self.pos = np.zeros(3)
+        self.pos[:2] = prior_mean[:2].flatten()
+
+        self.att = np.zeros(3)
+        self.att[-1] = prior_mean[-1].flatten()
+
+        self.pos_sigmas = np.ones(3) * 1e-9
+        self.pos_sigmas[:2] = prior_sigmas[:2].flatten()
+
+        self.att_sigmas = np.ones(3) * 1e-9
+        self.att_sigmas[-1] = prior_sigmas[-1].flatten()
+
+        self.vel = np.zeros(3)
+        self.vel[:2] = velocity_mean.flatten()
+
+        self.vel_sigmas = np.ones(3) * 1e-9
+        self.vel_sigmas[:2] = velocity_sigmas.flatten()
 
 
-class Odometry:
+class IMU:
     """
-    Struct for storing odometry measurements.
+    Struct for storing IMU measurements.
     """
-    def __init__(self, vehicle: str, mean: np.ndarray, Sigma: np.ndarray):
+    def __init__(self, vehicle: str, mean: np.ndarray):
         """
+        Params:
         vehicle: str
             The name of the vehicle.
-        mean: np.ndarray (3, 1)
-            The mean of the odometry. x, y, theta.
-        Sigmas: np.ndarray (3, 3)
-            The covariance of the odometry.
+        mean: np.ndarray(3,1)
+            The mean of the IMU measurement (ax, ay, omega).
         """
         assert mean.shape == (3, 1)
-        assert Sigma.shape == (3, 3)
 
         self.vehicle = vehicle
-        self.mean = mean
-        self.Sigma = Sigma
 
+        self.accel = np.zeros(3)
+        self.accel[:2] = mean[:2].flatten()
 
-class Global:
-    """
-    Struct for storing global measurements.
-    """
-    def __init__(self, vehicle: str, mean: np.ndarray, Sigmas: np.ndarray):
-        """
-        vehicle: str
-            The name of the vehicle.
-        mean: np.ndarray (3, 1)
-            The mean of the global measurement. x, y, theta.
-        Sigmas: np.ndarray (3, 1)
-            The standard deviations of the global measurement.
-        """
-        assert mean.shape == (3, 1)
-        assert Sigmas.shape == (3, 1)
-
-        self.vehicle = vehicle
-        self.mean = mean
-        self.Sigmas = Sigmas
-
-
-class Range:
-    """
-    Struct for storing range measurements.
-    """
-    def __init__(self, vehicle1: str, vehicle2: str, mean: float, Sigma: float):
-        """
-        vehicle1: str
-            The name of the first associated vehicle.
-        vehicle2: str
-            The name of the second associated vehicle.
-        mean: float
-            The mean of the range measurement.
-        Sigmas: float
-            The standard deviation of the range measurement.
-        """
-        self.vehicle1 = vehicle1
-        self.vehicle2 = vehicle2
-        self.mean = mean
-        self.Sigma = Sigma
+        self.gyro = np.zeros(3)
+        self.gyro[-1] = mean[-1].flatten()
 
 
 class Backend:
     """
     Multi-agent backend, utilizing GTSAM for factor graph optimization.
     """
-    def __init__(self, priors: List[Prior]):
+    def __init__(self, priors: List[Prior], imu_sigmas: np.ndarray, imu_dt: float):
+        """
+        Params:
+        priors: List[Prior]
+            List of prior for each vehicle. Determines the number of vehicles in the system.
+        imu_sigmas: np.ndarray(3,1)
+            The standard deviation of the IMU measurements (ax, ay, omega).
+        imu_dt: float
+            The time step for the IMU measurements.
+        """
+        assert imu_sigmas.shape == (3, 1)
+
         # Check for duplicate vehicle names
         vehicles = [prior.vehicle for prior in priors]
         if len(vehicles) != len(set(vehicles)):
@@ -106,104 +101,72 @@ class Backend:
         # Add the priors, keeping track of the vehicle pose ids
         self.next_id = 0
         self.vehicle_pose_ids = {}
+        self.vehicle_velocity_ids = {}
+        self.vehicle_bias_ids = {}
         self.current_estimates = gtsam.Values()
         for prior in priors:
+            p = gtsam.Point3(*prior.pos)
+            r = gtsam.Rot3.RzRyRx(*prior.att)
+
             self.graph.add(
-                gtsam.PriorFactorPose2(
+                gtsam.PriorFactorPose3(
                     self.next_id,
-                    gtsam.Pose2(*prior.mean),
-                    gtsam.noiseModel.Diagonal.Sigmas(prior.sigmas.flatten())
+                    gtsam.Pose3(r, p),
+                    gtsam.noiseModel.Diagonal.Sigmas(np.append(
+                        prior.att_sigmas, prior.pos_sigmas
+                    ))
                 )
             )
-            self.current_estimates.insert(self.next_id, gtsam.Pose2(*prior.mean))
+            self.current_estimates.insert(self.next_id, gtsam.Pose3(r, p))
             self.vehicle_pose_ids[prior.vehicle] = [self.next_id]
             self.next_id += 1
 
-        self.graph_outdated = True
-
-    def add_odometry(self, odometry: Odometry):
-        """
-        Add an odometry measurement to the graph for the specified vehicle.
-
-        odometry: Odometry
-            The odometry measurement to add.
-        """
-
-        # Check the vehicle name already exists
-        if odometry.vehicle not in self.vehicle_pose_ids:
-            raise ValueError(f"Vehicle name {odometry.vehicle} not found in priors.")
-
-        # Add the odometry factor
-        self.graph_outdated = True
-        self.graph.add(
-            gtsam.BetweenFactorPose2(
-                self.vehicle_pose_ids[odometry.vehicle][-1],
-                self.next_id,
-                gtsam.Pose2(*odometry.mean),
-                gtsam.noiseModel.Gaussian.Covariance(odometry.Sigma)
+            self.graph.add(
+                gtsam.PriorFactorVector(
+                    self.next_id,
+                    prior.vel,
+                    gtsam.noiseModel.Diagonal.Sigmas(prior.vel_sigmas)
+                )
             )
-        )
+            self.current_estimates.insert(self.next_id, prior.vel)
+            self.vehicle_velocity_ids[prior.vehicle] = [self.next_id]
+            self.next_id += 1
 
-        # Add a new estimate to the current estimates
-        x = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).x()
-        y = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).y()
-        theta = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).theta()
-        delta_x = odometry.mean.item(0) * np.cos(theta) - odometry.mean.item(1) * np.sin(theta)
-        delta_y = odometry.mean.item(0) * np.sin(theta) + odometry.mean.item(1) * np.cos(theta)
-        delta_theta = odometry.mean.item(2)
-        self.current_estimates.insert(
-            self.next_id, gtsam.Pose2(x + delta_x, y + delta_y, theta + delta_theta)
-        )
-
-        # Add the new pose id to the vehicle's list
-        self.vehicle_pose_ids[odometry.vehicle].append(self.next_id)
-        self.next_id += 1
-
-    def add_global(self, global_measurement: Global):
-        """
-        Add a global measurement to the graph for the specified vehicle.
-
-        global_measurement: Global
-            The global measurement to add.
-        """
-
-        # Check the vehicle name already exists
-        if global_measurement.vehicle not in self.vehicle_pose_ids:
-            raise ValueError(f"Vehicle name {global_measurement.vehicle} not found in priors.")
-
-        # Add the global factor
-        self.graph_outdated = True
-        self.graph.add(
-            gtsam.CustomFactor(
-                gtsam.noiseModel.Diagonal.Sigmas(global_measurement.Sigmas.flatten()),
-                [self.vehicle_pose_ids[global_measurement.vehicle][-1]],
-                partial(_error_global, global_measurement.mean.flatten())
+            bias = gtsam.imuBias.ConstantBias(np.zeros(3), np.zeros(3))
+            self.graph.add(
+                gtsam.PriorFactorConstantBias(
+                    self.next_id,
+                    bias,
+                    gtsam.noiseModel.Isotropic.Sigma(6, 1e-9)
+                )
             )
-        )
+            self.current_estimates.insert(self.next_id, bias)
+            self.vehicle_bias_ids[prior.vehicle] = [self.next_id]
+            self.next_id += 1
 
-    def add_range(self, range_measurement: Range):
-        """
-        Add a range measurement to the graph for the specified vehicles.
-
-        range_measurement: Range
-            The range measurement to add.
-        """
-
-        # Check the vehicle names already exist
-        if range_measurement.vehicle1 not in self.vehicle_pose_ids:
-            raise ValueError(f"Vehicle name {range_measurement.vehicle1} not found in priors.")
-        if range_measurement.vehicle2 not in self.vehicle_pose_ids:
-            raise ValueError(f"Vehicle name {range_measurement.vehicle2} not found in priors.")
-
-        # Add the range factor
+        # Various initializations
         self.graph_outdated = True
-        self.graph.add(
-            gtsam.RangeFactorPose2(
-                self.vehicle_pose_ids[range_measurement.vehicle1][-1],
-                self.vehicle_pose_ids[range_measurement.vehicle2][-1],
-                range_measurement.mean,
-                gtsam.noiseModel.Isotropic.Sigma(1, range_measurement.Sigma)
-            )
+        self.imu_storage = {}
+        for prior in priors:
+            self.imu_storage[prior.vehicle] = []
+        self.imu_dt = imu_dt
+
+        # IMU pre-integration object
+        params = gtsam.PreintegrationCombinedParams.MakeSharedU(1e-9)
+        accel_Sigma = np.eye(3) * 1e-9
+        accel_Sigma[0, 0] = imu_sigmas.item(0)**2
+        accel_Sigma[1, 1] = imu_sigmas.item(1)**2
+        gyro_Sigma = np.eye(3) * 1e-9
+        gyro_Sigma[2, 2] = imu_sigmas.item(2) ** 2
+        params.setGyroscopeCovariance(gyro_Sigma)
+        params.setAccelerometerCovariance(accel_Sigma)
+        params.setIntegrationCovariance(1e-9 * np.eye(3))
+        params.setBiasAccCovariance(1e-9 * np.eye(3))
+        params.setBiasOmegaCovariance(1e-9 * np.eye(3))
+        params.setBiasAccOmegaInit(1e-9 * np.eye(6))
+        self.pim = gtsam.PreintegratedCombinedMeasurements(
+            params,
+            gtsam.imuBias.ConstantBias(np.zeros(3), np.zeros(3))
         )
 
     def get_vehicle_info(self, vehicle: str):
@@ -223,23 +186,28 @@ class Backend:
             raise ValueError(f"Vehicle name {vehicle} not found in priors.")
 
         # Update the graph and return the estimated pose and uncertainty
+        self._create_imu_edge(vehicle)
         self._update()
-        pose = np.array([
-            self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).x(),
-            self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).y(),
-            self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).theta()
-        ]).reshape(-1, 1)
+        rotation = self.current_estimates.atPose3(self.vehicle_pose_ids[vehicle][-1]).rotation()
+        translation = self.current_estimates.atPose3(self.vehicle_pose_ids[vehicle][-1]).translation()
+        x = translation.item(0)
+        y = translation.item(1)
+        theta = rotation.yaw()
+        pose = np.array([x, y, theta]).reshape(-1, 1)
 
         # Get the covariance of the last pose in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
         covariance = marginals.marginalCovariance(self.vehicle_pose_ids[vehicle][-1])
-        theta = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).theta()
-        rot = np.array([[np.cos(theta), -np.sin(theta), 0],
-                        [np.sin(theta),  np.cos(theta), 0],
-                        [0,              0,             1]])
-        covariance = rot @ covariance @ rot.T
 
-        return pose, covariance
+        R = np.eye(6)
+        R[3:, 3:] = rotation.matrix()
+        M = np.array([[0, 0, 0, 1, 0, 0],
+                      [0, 0, 0, 0, 1, 0],
+                      [0, 0, 1, 0, 0, 0]])
+
+        cov_2d = M @ R @ covariance @ R.T @ M.T
+
+        return pose, cov_2d
 
     def get_full_trajectory(self, vehicle: str):
         """
@@ -257,82 +225,104 @@ class Backend:
             raise ValueError(f"Vehicle name {vehicle} not found in priors.")
 
         # Update the graph and get full trajectory
+        self._create_imu_edge(vehicle)
         self._update()
-        poses = np.array([
-            [self.current_estimates.atPose2(i).x(),
-             self.current_estimates.atPose2(i).y(),
-             self.current_estimates.atPose2(i).theta()]
-            for i in self.vehicle_pose_ids[vehicle]
-        ]).T
+        poses = []
+        for i in self.vehicle_pose_ids[vehicle]:
+            p = self.current_estimates.atPose3(i).translation()
+            r = self.current_estimates.atPose3(i).rotation()
+            poses.append(np.array([[p.item(0), p.item(1), r.yaw()]]).T)
+        poses = np.hstack(poses)
 
         # Get the covariances in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
         covariances = []
+        M = np.array([[0, 0, 0, 1, 0, 0],
+                      [0, 0, 0, 0, 1, 0],
+                      [0, 0, 1, 0, 0, 0]])
         for i in self.vehicle_pose_ids[vehicle]:
-            theta = self.current_estimates.atPose2(i).theta()
             cov = marginals.marginalCovariance(i)
-            rot = np.array([[np.cos(theta), -np.sin(theta), 0],
-                            [np.sin(theta),  np.cos(theta), 0],
-                            [0,              0,             1]])
-            cov = rot @ cov @ rot.T
-            covariances.append(cov)
+
+            R = np.eye(6)
+            R[3:, 3:] = self.current_estimates.atPose3(i).rotation().matrix()
+            cov_2d = M @ R @ cov @ R.T @ M.T
+
+            covariances.append(cov_2d)
         covariances = np.array(covariances)
 
         return poses, covariances
 
-    def get_transformation(self, vehicle_1: str, vehicle_2: str):
+    def add_imu(self, imu: IMU):
         """
-        Get tranformation from vehicle_1 to vehicle_2 with the correct tranformational uncertainty.
-        Returns the transformation of the latest poses, in global frame.
-
-        Mirrors Brendon's partial_update_msckf repository.
-        https://github.com/byu-magicc-archive/brendon__partial_update_msckf/blob/main/backend.py
-
-        vehicle_1: str
-            The name of the first vehicle.
-        vehicle_2: str
-            The name of the second vehicle.
-
-        Returns: (np.ndarray(3, 1), (np.ndarray(3, 3))
-            Transformation and covariance
+        Add an IMU measurement to the graph for the specified vehicle.
         """
 
-        if vehicle_1 not in self.vehicle_pose_ids or vehicle_2 not in self.vehicle_pose_ids:
-            raise ValueError(f"Vehicle name {vehicle_1} or {vehicle_2} not found in priors.")
+        # Check the vehicle name already exists
+        if imu.vehicle not in self.vehicle_pose_ids:
+            raise ValueError(f"Vehicle name {imu.vehicle} not found in priors.")
 
-        self._update()
+        # Add to the IMU storage
+        self.imu_storage[imu.vehicle].append(imu)
 
-        # Get the latest poses
-        pose_1 = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_1][-1])
-        pose_2 = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle_2][-1])
-        t_1_2 = gtsam.Pose2.between(pose_1, pose_2)
-        t_1_2 = np.array([t_1_2.x(), t_1_2.y(), t_1_2.theta()]).reshape(-1, 1)
+        self.graph_outdated = True
 
-        # Get the joint covariance of the two poses
-        marginals = gtsam.Marginals(self.graph, self.current_estimates)
-        joint_cov = marginals.jointMarginalCovariance([
-            self.vehicle_pose_ids[vehicle_1][-1],
-            self.vehicle_pose_ids[vehicle_2][-1]
-        ]).fullMatrix()
-        cov_1 = joint_cov[:3, :3]
-        cov_2 = joint_cov[3:, 3:]
-        cov_12 = joint_cov[:3, 3:]
-        cov_21 = joint_cov[3:, :3]
+    def _create_imu_edge(self, vehicle: str):
+        """
+        Create IMU pre-integration factors for the associated vehicle and add it to the graph.
+        """
 
-        # Get the covariance of the transformation
-        adj = pose_2.inverse().AdjointMap() @ pose_1.AdjointMap()
-        cov = adj @ cov_1 @ adj.T + cov_2 - adj @ cov_12 - cov_21 @ adj.T
+        # Return if nothing to do
+        if self.imu_storage[vehicle] == []:
+            return
 
-        # Rotate to the global frame
-        theta = pose_1.theta()
-        R = np.array([[np.cos(theta), -np.sin(theta), 0],
-                      [np.sin(theta),  np.cos(theta), 0],
-                      [0,              0,             1]])
-        t_1_2_global = R @ t_1_2
+        # Integrate measurements
+        self.pim.resetIntegration()
+        for meas in self.imu_storage[vehicle]:
+            self.pim.integrateMeasurement(meas.accel, meas.gyro, self.imu_dt)
+        self.imu_storage[vehicle] = []
 
-        cov_global = R @ cov @ R.T
+        # Add to FG
+        self.graph.push_back(
+            gtsam.CombinedImuFactor(
+                self.vehicle_pose_ids[vehicle][-1],
+                self.vehicle_velocity_ids[vehicle][-1],
+                self.next_id,
+                self.next_id + 1,
+                self.vehicle_bias_ids[vehicle][-1],
+                self.next_id + 2,
+                self.pim
+            )
+        )
 
-        return t_1_2_global, cov_global
+        # Add estimated pose
+        translation = self.current_estimates.atPose3(self.vehicle_pose_ids[vehicle][-1]).translation()
+        rotation = self.current_estimates.atPose3(self.vehicle_pose_ids[vehicle][-1]).rotation()
+        R = rotation.matrix()
+        translation = translation + R @ self.pim.deltaPij()
+        rotation = rotation.compose(self.pim.deltaRij())
+        self.current_estimates.insert(
+            self.next_id,
+            gtsam.Pose3(rotation, translation)
+        )
+
+        # Add estimated velocity
+        velocity = self.current_estimates.atVector(self.vehicle_velocity_ids[vehicle][-1])
+        velocity = velocity + R @ self.pim.deltaVij()
+        self.current_estimates.insert(
+            self.next_id + 1,
+            velocity
+        )
+
+        # Add zero bias
+        self.current_estimates.insert(
+            self.next_id + 2,
+            gtsam.imuBias.ConstantBias(np.zeros(3), np.zeros(3))
+        )
+
+        self.vehicle_pose_ids[vehicle].append(self.next_id)
+        self.vehicle_velocity_ids[vehicle].append(self.next_id + 1)
+        self.vehicle_bias_ids[vehicle].append(self.next_id + 2)
+        self.next_id += 3
 
 
     def _update(self):
@@ -346,84 +336,40 @@ class Backend:
             self.graph_outdated = False
 
 
-def _error_global(measurement: np.ndarray,
-                  this: gtsam.CustomFactor,
-                  values: gtsam.Values,
-                  jacobians: Optional[List[np.ndarray]]) -> np.ndarray:
-    """
-    Global Factor error function
-
-    measurement:
-        Global measurement, to be filled with `partial`.
-    this:
-        gtsam.CustomFactor handle.
-    values:
-        gtsam.Values.
-    jacobians: 
-        Optional list of Jacobians.
-
-    Return: the unwhitened error
-    """
-    key = this.keys()[0]
-    estimate = values.atPose2(key)
-    theta = estimate.theta()
-    estimate = np.array([estimate.x(), estimate.y(), estimate.theta()])
-    error = estimate - measurement
-
-    if jacobians is not None:
-        jacobians[0] = np.array([[np.cos(theta), -np.sin(theta), 0],
-                                 [np.sin(theta), np.cos(theta), 0],
-                                 [0, 0, 1]])
-
-    return error
-
-
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
     from matplotlib.patches import Ellipse
 
-    prior_noise = np.array([[0.1], [0.1], [0.1]])
-    odometry_covariance = np.diag([0.2, 0.2, 0.1])**2
-    global_noise = np.array([[0.1], [0.1], [np.inf]])
-    range_noise = 0.1
+    prior_pos_noise = np.array([[0.1], [0.2], [0.3]])
+    prior_vel_noise = np.array([[0.04], [0.05]])
+    imu_noise = np.array([[0.1], [0.1], [0.1]])
+    dt = 0.1
 
     priors = [
-        Prior("A", np.array([[0], [0], [0]]), prior_noise),
-        Prior("B", np.array([[0], [5], [np.pi / 4]]), prior_noise),
+        Prior("A", np.array([[0], [0], [0]]), prior_pos_noise,
+              np.array([[0], [0]]), prior_vel_noise),
+        Prior("B", np.array([[0], [5], [np.pi / 4]]), prior_pos_noise,
+              np.array([[0], [0]]), prior_vel_noise),
     ]
-    odometries_1 = [
-        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
-        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
-    ]
-    range_measurements = [
-        Range("A", "B", 6, range_noise),
-    ]
-    odometries_2 = [
-        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
-        Odometry("A", np.array([[2], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0]]), odometry_covariance),
-    ]
-    globals = [
-        Global("A", np.array([[8], [0], [0]]), global_noise),
-    ]
+    imu_a = IMU("A", np.array([[0.1], [-0.1], [-0.01]]))
+    imu_b = IMU("B", np.array([[0.3], [-0.3], [0.01]]))
 
-    backend = Backend(priors)
-    for odometry in odometries_1:
-        backend.add_odometry(odometry)
-    for range_meas in range_measurements:
-        backend.add_range(range_meas)
-    for odometry in odometries_2:
-        backend.add_odometry(odometry)
-    for global_measurement in globals:
-        backend.add_global(global_measurement)
+    backend = Backend(priors, imu_noise, dt)
+
+    for _ in range(100):
+        backend.add_imu(imu_a)
+        backend.add_imu(imu_b)
+    backend._create_imu_edge("A")
+    backend._create_imu_edge("B")
+    backend._update()
+    for _ in range(100):
+        backend.add_imu(imu_a)
+        backend.add_imu(imu_b)
+    backend._create_imu_edge("A")
+    backend._create_imu_edge("B")
 
     poses_1, covariances_1 = backend.get_full_trajectory("A")
     poses_2, covariances_2 = backend.get_full_trajectory("B")
-
-    print(backend.get_transformation("B", "A"))
 
     plt.figure()
     plt.plot(poses_1[0, :], poses_1[1, :], color="b", marker="o", label="A")
