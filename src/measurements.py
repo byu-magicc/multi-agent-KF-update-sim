@@ -81,64 +81,49 @@ def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_d
     return z, Sigma_z
 
 
-# TODO: Does this really belong here?
-def get_relative_pose(pose_a, pose_b, Sigma_a, Sigma_b):
+def get_odometry_transform(pose_a, pose_b, Sigma_a, Sigma_b):
     """
     Get transformation from vehicle a to vehicle b with the correct transformation uncertainty,
-    in frame of vehicle a.
+    in frame of vehicle a. Uncertainty is in frame of vehicle b, for GTSAM.
 
     Params:
-    pose_a: np.array, shape (3, 1)
+    pose_a: np.array, shape (5, 1)
         Pose of vehicle 0. [[x, y, theta]].T
-    pose_b: np.array, shape (3, 1)
+    pose_b: np.array, shape (5, 1)
         Pose of vehicle 1. [[x, y, theta]].T
-    Sigma_a: np.array, shape (3, 3)
+    Sigma_a: np.array, shape (5, 5)
         Covariance of vehicle 0.
-    Sigma_b: np.array, shape (3, 3)
+    Sigma_b: np.array, shape (5, 5)
         Covariance of vehicle 1.
 
-    Returns: (np.ndarray(3, 1), (np.ndarray(3, 3))
+    Returns: (np.ndarray(5, 1), (np.ndarray(5, 5))
         Transformation and covariance
     """
-    assert pose_a.shape == (3, 1)
-    assert pose_b.shape == (3, 1)
-    assert Sigma_a.shape == (3, 3)
-    assert Sigma_b.shape == (3, 3)
+    assert pose_a.shape == (5, 1)
+    assert pose_b.shape == (5, 1)
+    assert Sigma_a.shape == (5, 5)
+    assert Sigma_b.shape == (5, 5)
 
     # Get the transformation from vehicle a to vehicle b, in vehicle a frame
     theta_a = pose_a.item(2)
-    R = np.array([[np.cos(theta_a), -np.sin(theta_a), 0],
-                  [np.sin(theta_a),  np.cos(theta_a), 0],
-                  [              0,                0, 1]])
-    T_a_b = R.T @ (pose_b - pose_a)
+    R_2d = np.array([[np.cos(theta_a), -np.sin(theta_a)],
+                     [np.sin(theta_a),  np.cos(theta_a)]]).T
+    R = np.eye(5)
+    R[:2, :2] = R_2d
+    R[3:, 3:] = R_2d
+    T_a_b = R @ (pose_b - pose_a)
 
-    # Get the covariance of the two poses, in global frame
-    joint_Sigma = np.zeros((6, 6))
-    joint_Sigma[:3, :3] = Sigma_a
-    joint_Sigma[3:, 3:] = Sigma_b
+    # Get the transformation uncertainty
+    # GTSAM wants uncertainty in frame of vehicle b, not sure why
+    theta_b = pose_b.item(2)
+    R_2d = np.array([[np.cos(theta_b), -np.sin(theta_b)],
+                     [np.sin(theta_b),  np.cos(theta_b)]]).T
+    R = np.eye(5)
+    R[:2, :2] = R_2d
+    R[3:, 3:] = R_2d
+    Sigma_T = R @ (Sigma_b - Sigma_a) @ R.T
 
-    # Get the jacobian of the tail to tail transformation
-    theta_a = pose_a.item(2)
-    x_b_a = pose_b.item(0) - pose_a.item(0)
-    y_b_a = pose_b.item(1) - pose_a.item(1)
-    J = np.array([[-np.cos(theta_a),
-                   -np.sin(theta_a),
-                   -np.sin(theta_a)*x_b_a + np.cos(theta_a)*y_b_a,
-                   np.cos(theta_a),
-                   np.sin(theta_a),
-                   0],
-                  [np.sin(theta_a),
-                   -np.cos(theta_a),
-                   -np.cos(theta_a)*x_b_a - np.sin(theta_a)*y_b_a,
-                   -np.sin(theta_a),
-                   np.cos(theta_a),
-                   0],
-                  [0, 0, -1, 0, 0, 1]])
-
-    # Compute the uncertainty of the transformation
-    Sigma = J @ joint_Sigma @ J.T
-
-    return T_a_b, Sigma
+    return T_a_b, Sigma_T
 
 
 if __name__ == "__main__":
