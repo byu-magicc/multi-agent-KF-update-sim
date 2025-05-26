@@ -252,7 +252,7 @@ class Simulation:
                                             self.vehicles[vehicle_idx]._ekf.mu,
                                             self.previous_vehicle_Sigma[vehicle_idx],
                                             self.vehicles[vehicle_idx]._ekf.Sigma)
-        self.backend.add_odometry(Odometry(f"{vehicle_idx}", T[:3, :3], Sigma_T[:3, :3]))
+        self.backend.add_odometry(Odometry(f"{vehicle_idx}", T[:3], Sigma_T[:3, :3]))
 
     def _update_previous_pose(self, vehicle_idx):
         """
@@ -269,6 +269,7 @@ class Simulation:
 if __name__ == "__main__":
     from plotters import plot_trajectory_error, plot_overview, Trajectory, Covariance
 
+    np.random.seed(0)
     simulation = Simulation(0)
 
     time_hist, truth_hist_array, ekf_mu_hist_array, ekf_Sigma_hist_array, \
@@ -300,10 +301,6 @@ if __name__ == "__main__":
         backend_mu_hist[i] = [backend_mu_hist_array[i]]
         backend_Sigma_hist[i] = [backend_Sigma_hist_array[i]]
 
-    print('====================')
-    print(simulation.backend.graph)
-    print(ekf_Sigma_hist_array[0][-1][:3, :3])
-    print(backend_Sigma_hist_array[0][-1])
     plot_overview(poses, covariances)
     plot_trajectory_error(time_hist, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                           backend_Sigma_hist, plot_backend=False)

@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 
 
 def get_imu_data(trajectory, noise_std, v_0, dt):
@@ -122,6 +123,9 @@ def get_odometry_transform(pose_a, pose_b, Sigma_a, Sigma_b):
     R[:2, :2] = R_2d
     R[3:, 3:] = R_2d
     Sigma_T = R @ (Sigma_b - Sigma_a) @ R.T
+
+    if (np.linalg.eigvals(Sigma_T) < 0).any():
+        warnings.warn('Transformation covariance is not semi-positive definite!')
 
     return T_a_b, Sigma_T
 
