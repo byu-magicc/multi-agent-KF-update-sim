@@ -250,22 +250,29 @@ class Backend:
 
         # Update the graph and return the estimated pose and uncertainty
         self._update()
-        pose = np.array([
+        estimate = np.array([
             self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).x(),
             self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).y(),
-            self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).theta()
+            self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).theta(),
+            self.current_estimates.atVector(self.vehicle_velocity_ids[vehicle][-1]).item(0),
+            self.current_estimates.atVector(self.vehicle_velocity_ids[vehicle][-1]).item(1)
         ]).reshape(-1, 1)
 
         # Get the covariance of the last pose in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
-        covariance = marginals.marginalCovariance(self.vehicle_pose_ids[vehicle][-1])
+        covariance = marginals.jointMarginalCovariance([
+            self.vehicle_pose_ids[vehicle][-1],
+            self.vehicle_velocity_ids[vehicle][-1]
+        ]).fullMatrix()
         theta = self.current_estimates.atPose2(self.vehicle_pose_ids[vehicle][-1]).theta()
-        rot = np.array([[np.cos(theta), -np.sin(theta), 0],
-                        [np.sin(theta),  np.cos(theta), 0],
-                        [0,              0,             1]])
-        covariance = rot @ covariance @ rot.T
+        R = np.array([[np.cos(theta), -np.sin(theta)],
+                      [np.sin(theta),  np.cos(theta)]])
+        R_full = np.eye(5)
+        R_full[:2, :2] = R
+        R_full[3:, 3:] = R
+        covariance = R_full @ covariance @ R_full.T
 
-        return pose, covariance
+        return estimate, covariance
 
     def get_full_trajectory(self, vehicle: str):
         """
@@ -284,27 +291,31 @@ class Backend:
 
         # Update the graph and get full trajectory
         self._update()
-        poses = np.array([
+        estimates = np.array([
             [self.current_estimates.atPose2(i).x(),
              self.current_estimates.atPose2(i).y(),
-             self.current_estimates.atPose2(i).theta()]
-            for i in self.vehicle_pose_ids[vehicle]
+             self.current_estimates.atPose2(i).theta(),
+             self.current_estimates.atVector(j).item(0),
+             self.current_estimates.atVector(j).item(1)]
+            for i, j in zip(self.vehicle_pose_ids[vehicle], self.vehicle_velocity_ids[vehicle])
         ]).T
 
         # Get the covariances in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
         covariances = []
-        for i in self.vehicle_pose_ids[vehicle]:
+        for i, j in zip(self.vehicle_pose_ids[vehicle], self.vehicle_velocity_ids[vehicle]):
             theta = self.current_estimates.atPose2(i).theta()
-            cov = marginals.marginalCovariance(i)
-            rot = np.array([[np.cos(theta), -np.sin(theta), 0],
-                            [np.sin(theta),  np.cos(theta), 0],
-                            [0,              0,             1]])
-            cov = rot @ cov @ rot.T
+            cov = marginals.jointMarginalCovariance([i, j]).fullMatrix()
+            R = np.array([[np.cos(theta), -np.sin(theta)],
+                          [np.sin(theta),  np.cos(theta)]])
+            R_full = np.eye(5)
+            R_full[:2, :2] = R
+            R_full[3:, 3:] = R
+            cov = R_full @ cov @ R_full.T
             covariances.append(cov)
         covariances = np.array(covariances)
 
-        return poses, covariances
+        return estimates, covariances
 
     def get_transformation(self, vehicle_1: str, vehicle_2: str):
         """
@@ -366,10 +377,6 @@ class Backend:
         Update the graph if it is outdated.
         """
         if self.graph_outdated:
-            print('=================')
-            print(self.graph)
-            print('-----------------')
-            print(self.current_estimates)
             self.current_estimates = gtsam.LevenbergMarquardtOptimizer(
                 self.graph, self.current_estimates, self.params
             ).optimize()
@@ -485,8 +492,8 @@ if __name__ == "__main__":
     from matplotlib import pyplot as plt
     from matplotlib.patches import Ellipse
 
-    prior_noise = np.array([[0.1], [0.1], [0.1], [1e-9], [1e-9]])
-    odometry_covariance = np.diag([0.2, 0.2, 0.1, 1e-9, 1e-9])**2
+    prior_noise = np.array([[0.1], [0.1], [0.1], [1e-6], [1e-6]])
+    odometry_covariance = np.diag([0.2, 0.2, 0.1, 1e-6, 1e-6])**2
     global_noise = np.array([[0.1], [0.1], [np.inf]])
     range_noise = 0.1
 
@@ -500,33 +507,31 @@ if __name__ == "__main__":
         Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
         Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
     ]
-    #range_measurements = [
-    #    Range("A", "B", 6, range_noise),
-    #]
+    range_measurements = [
+        Range("A", "B", 6, range_noise),
+    ]
     odometries_2 = [
         Odometry("A", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
         Odometry("A", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
         Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
         Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
     ]
-    #globals = [
-    #    Global("A", np.array([[8], [0], [0]]), global_noise),
-    #]
+    globals = [
+        Global("A", np.array([[8], [0], [0]]), global_noise),
+    ]
 
     backend = Backend(priors)
     for odometry in odometries_1:
         backend.add_odometry(odometry)
-    #for range_meas in range_measurements:
-    #    backend.add_range(range_meas)
-    #for odometry in odometries_2:
-    #    backend.add_odometry(odometry)
-    #for global_measurement in globals:
-    #    backend.add_global(global_measurement)
+    for range_meas in range_measurements:
+        backend.add_range(range_meas)
+    for odometry in odometries_2:
+        backend.add_odometry(odometry)
+    for global_measurement in globals:
+        backend.add_global(global_measurement)
 
     poses_1, covariances_1 = backend.get_full_trajectory("A")
     poses_2, covariances_2 = backend.get_full_trajectory("B")
-
-    print(backend.get_transformation("B", "A"))
 
     plt.figure()
     plt.plot(poses_1[0, :], poses_1[1, :], color="b", marker="o", label="A")

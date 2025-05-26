@@ -52,7 +52,7 @@ class Simulation:
         ], dtype=int)
 
         # Measurement uncertainty
-        INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5), 0.5, 0.5]).reshape(-1, 1) * 1e-9
+        INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5), 0.5, 0.5]).reshape(-1, 1) * 1e-6
         self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, 1e9]).reshape(-1, 1)
         self.RANGE_MEASUREMENT_STD = 1.0
 
@@ -65,7 +65,7 @@ class Simulation:
 
         # Create backend
         priors = [
-            Prior(f"{i}", self.vehicles[i]._ekf.mu[:3], INITIAL_UNCERTAINTY_STD[:3])
+            Prior(f"{i}", self.vehicles[i]._ekf.mu, INITIAL_UNCERTAINTY_STD)
             for i in range(len(INITIAL_POSITIONS))
         ]
         self.backend = Backend(priors)
@@ -252,7 +252,7 @@ class Simulation:
                                             self.vehicles[vehicle_idx]._ekf.mu,
                                             self.previous_vehicle_Sigma[vehicle_idx],
                                             self.vehicles[vehicle_idx]._ekf.Sigma)
-        self.backend.add_odometry(Odometry(f"{vehicle_idx}", T[:3], Sigma_T[:3, :3]))
+        self.backend.add_odometry(Odometry(f"{vehicle_idx}", T, Sigma_T))
 
     def _update_previous_pose(self, vehicle_idx):
         """

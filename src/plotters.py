@@ -225,10 +225,10 @@ def plot_trajectory_error(time_hist: np.ndarray,
             assert truth_hist[key][i].shape[1] == ekf_Sigma_hist[key][i].shape[0]
             assert ekf_Sigma_hist[key][i].shape[1:] == (5, 5)
             if plot_backend:
-                assert backend_mu_hist[key][i].shape[0] == 3
+                assert backend_mu_hist[key][i].shape[0] == 5
                 assert truth_hist[key][i].shape[1] == backend_mu_hist[key][i].shape[1]
                 assert truth_hist[key][i].shape[1] == backend_Sigma_hist[key][i].shape[0]
-                assert backend_Sigma_hist[key][i].shape[1:] == (3, 3)
+                assert backend_Sigma_hist[key][i].shape[1:] == (5, 5)
 
     # Check if we have multiple instances
     overlay_plots = len(next(iter(ekf_mu_hist.values()))) > 1
@@ -261,7 +261,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
             backend_residuals = []
             nees = []
             for i in range(len(backend_mu_hist[key])):
-                residuals = backend_mu_hist[key][i] - truth_hist[key][i][:3]
+                residuals = backend_mu_hist[key][i] - truth_hist[key][i]
                 backend_residuals.append(residuals)
 
                 Sigmas = backend_Sigma_hist[key][i]
@@ -307,10 +307,14 @@ def plot_trajectory_error(time_hist: np.ndarray,
             # X Velocity
             axs[3, column_idx].plot(time_hist, ekf_error_sigma[key][3, :], color='g')
             axs[3, column_idx].grid()
+            if plot_backend:
+                axs[3, column_idx].plot(time_hist, backend_error_sigma[key][3, :], color='m')
 
             # Y Velocity
             axs[4, column_idx].plot(time_hist, ekf_error_sigma[key][4, :], color='g')
             axs[4, column_idx].grid()
+            if plot_backend:
+                axs[4, column_idx].plot(time_hist, backend_error_sigma[key][4, :], color='m')
 
             # NEES
             axs[5, column_idx].axhline(5.0, color='g', linestyle='--')
@@ -360,7 +364,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
             if plot_backend:
                 curr_backend_mu = backend_mu_hist[key][i]
                 curr_backend_sigma = np.sqrt(np.diagonal(backend_Sigma_hist[key][i], axis1=1, axis2=2).T)
-                backend_error = curr_backend_mu - curr_truth[:3]
+                backend_error = curr_backend_mu - curr_truth
 
             # X position
             if i == 0:
@@ -410,10 +414,20 @@ def plot_trajectory_error(time_hist: np.ndarray,
             axs[3, column_idx].plot(time_hist, num_sigma*curr_ekf_sigma[3, :], color='b')
             axs[3, column_idx].plot(time_hist, -num_sigma*curr_ekf_sigma[3, :], color='b')
 
+            if plot_backend:
+                axs[3, column_idx].plot(time_hist, backend_error[3, :], color='y', alpha=alpha)
+                axs[3, column_idx].plot(time_hist, num_sigma*curr_backend_sigma[3, :], color='c')
+                axs[3, column_idx].plot(time_hist, -num_sigma*curr_backend_sigma[3, :], color='c')
+
             # Y Velocity
             axs[4, column_idx].plot(time_hist, ekf_error[4, :], color='r', alpha=alpha)
             axs[4, column_idx].plot(time_hist, num_sigma*curr_ekf_sigma[4, :], color='b')
             axs[4, column_idx].plot(time_hist, -num_sigma*curr_ekf_sigma[4, :], color='b')
+
+            if plot_backend:
+                axs[4, column_idx].plot(time_hist, backend_error[4, :], color='y', alpha=alpha)
+                axs[4, column_idx].plot(time_hist, num_sigma*curr_backend_sigma[4, :], color='c')
+                axs[4, column_idx].plot(time_hist, -num_sigma*curr_backend_sigma[4, :], color='c')
 
             # Formatting
             if i == 0:
