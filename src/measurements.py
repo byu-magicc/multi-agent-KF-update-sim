@@ -1,5 +1,4 @@
 import numpy as np
-import warnings
 
 
 def get_imu_data(trajectory, noise_std, v_0, dt):
@@ -82,54 +81,6 @@ def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_d
     return z, Sigma_z
 
 
-def get_odometry_transform(pose_a, pose_b, Sigma_a, Sigma_b):
-    """
-    Get transformation from vehicle a to vehicle b with the correct transformation uncertainty,
-    in frame of vehicle a. Uncertainty is in frame of vehicle b, for GTSAM.
-
-    Params:
-    pose_a: np.array, shape (5, 1)
-        Pose of vehicle 0. [[x, y, theta]].T
-    pose_b: np.array, shape (5, 1)
-        Pose of vehicle 1. [[x, y, theta]].T
-    Sigma_a: np.array, shape (5, 5)
-        Covariance of vehicle 0.
-    Sigma_b: np.array, shape (5, 5)
-        Covariance of vehicle 1.
-
-    Returns: (np.ndarray(5, 1), (np.ndarray(5, 5))
-        Transformation and covariance
-    """
-    assert pose_a.shape == (5, 1)
-    assert pose_b.shape == (5, 1)
-    assert Sigma_a.shape == (5, 5)
-    assert Sigma_b.shape == (5, 5)
-
-    # Get the transformation from vehicle a to vehicle b, in vehicle a frame
-    theta_a = pose_a.item(2)
-    R_2d = np.array([[np.cos(theta_a), -np.sin(theta_a)],
-                     [np.sin(theta_a),  np.cos(theta_a)]]).T
-    R = np.eye(5)
-    R[:2, :2] = R_2d
-    R[3:, 3:] = R_2d
-    T_a_b = R @ (pose_b - pose_a)
-
-    # Get the transformation uncertainty
-    # GTSAM wants uncertainty in frame of vehicle b, not sure why
-    theta_b = pose_b.item(2)
-    R_2d = np.array([[np.cos(theta_b), -np.sin(theta_b)],
-                     [np.sin(theta_b),  np.cos(theta_b)]]).T
-    R = np.eye(5)
-    R[:2, :2] = R_2d
-    R[3:, 3:] = R_2d
-    Sigma_T = R @ (Sigma_b - Sigma_a) @ R.T
-
-    if (np.linalg.eigvals(Sigma_T) < 0).any():
-        warnings.warn('Transformation covariance is not semi-positive definite!')
-
-    return T_a_b, Sigma_T
-
-
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from plotters import plot_overview, Trajectory
@@ -179,13 +130,3 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
 
-    # Test relative pose function
-    pose_0 = np.array([[0], [0], [0]])
-    pose_1 = np.array([[1], [1], [np.pi / 2]])
-    Sigma_0 = np.eye(3) * 0.1
-    Sigma_1 = np.eye(3) * 0.2
-    T_0_1, Sigma = get_relative_pose(pose_0, pose_1, Sigma_0, Sigma_1)
-    print("T_0_1")
-    print(T_0_1)
-    print("Sigma")
-    print(Sigma)

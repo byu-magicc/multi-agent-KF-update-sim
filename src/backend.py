@@ -29,27 +29,6 @@ class Prior:
         self.velocity_sigmas = sigmas[3:].flatten()
 
 
-class Odometry:
-    """
-    Struct for storing odometry measurements.
-    """
-    def __init__(self, vehicle: str, mean: np.ndarray, Sigma: np.ndarray):
-        """
-        vehicle: str
-            The name of the vehicle.
-        mean: np.ndarray (5, 1)
-            The mean of the odometry. delta_x, delta_y, delta_theta, delta_vx, delta_vy.
-        Sigmas: np.ndarray (5, 5)
-            The covariance of the odometry.
-        """
-        assert mean.shape == (5, 1)
-        assert Sigma.shape == (5, 5)
-
-        self.vehicle = vehicle
-        self.mean = mean
-        self.Sigma = Sigma
-
-
 class Global:
     """
     Struct for storing global measurements.
@@ -135,55 +114,6 @@ class Backend:
             self.next_id += 1
 
         self.graph_outdated = True
-
-    def add_odometry(self, odometry: Odometry):
-        """
-        Add an odometry measurement to the graph for the specified vehicle.
-
-        odometry: Odometry
-            The odometry measurement to add.
-        """
-
-        # Check the vehicle name already exists
-        if odometry.vehicle not in self.vehicle_pose_ids:
-            raise ValueError(f"Vehicle name {odometry.vehicle} not found in priors.")
-
-        # Add the odometry factor
-        self.graph_outdated = True
-        self.graph.add(
-            gtsam.CustomFactor(
-                gtsam.noiseModel.Gaussian.Covariance(odometry.Sigma),
-                [self.vehicle_pose_ids[odometry.vehicle][-1],
-                 self.next_id,
-                 self.vehicle_velocity_ids[odometry.vehicle][-1],
-                 self.next_id + 1],
-                partial(_error_odometry, odometry.mean.flatten())
-            )
-        )
-
-        # Add a new estimate to the current estimates
-        x = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).x()
-        y = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).y()
-        theta = self.current_estimates.atPose2(self.vehicle_pose_ids[odometry.vehicle][-1]).theta()
-        vx = self.current_estimates.atVector(self.vehicle_velocity_ids[odometry.vehicle][-1])[0]
-        vy = self.current_estimates.atVector(self.vehicle_velocity_ids[odometry.vehicle][-1])[1]
-        delta_x = odometry.mean.item(0) * np.cos(theta) - odometry.mean.item(1) * np.sin(theta)
-        delta_y = odometry.mean.item(0) * np.sin(theta) + odometry.mean.item(1) * np.cos(theta)
-        delta_theta = odometry.mean.item(2)
-        delta_vx = odometry.mean.item(3) * np.cos(theta) - odometry.mean.item(4) * np.sin(theta)
-        delta_vy = odometry.mean.item(3) * np.sin(theta) + odometry.mean.item(4) * np.cos(theta)
-        self.current_estimates.insert(
-            self.next_id, gtsam.Pose2(x + delta_x, y + delta_y, theta + delta_theta)
-        )
-        self.current_estimates.insert(
-            self.next_id + 1, np.array([vx + delta_vx, vy + delta_vy])
-        )
-
-        # Add the new pose id to the vehicle's list
-        self.vehicle_pose_ids[odometry.vehicle].append(self.next_id)
-        self.next_id += 1
-        self.vehicle_velocity_ids[odometry.vehicle].append(self.next_id)
-        self.next_id += 1
 
     def add_global(self, global_measurement: Global):
         """
@@ -360,85 +290,11 @@ def _error_global(measurement: np.ndarray,
     return error
 
 
-def _error_odometry(odometry: np.ndarray,
-                    this: gtsam.CustomFactor,
-                    values: gtsam.Values,
-                    jacobians: Optional[List[np.ndarray]]) -> np.ndarray:
-    """
-    Odometry factor error function
-
-    odometry:
-        odometry, to be filled with `partial`.
-    this:
-        gtsam.CustomFactor handle.
-    values:
-        gtsam.Values.
-    jacobians:
-        Optional list of Jacobians.
-
-    Return: the unwhitened error
-    """
-
-    # Get data from gtsam
-    pose_0_key = this.keys()[0]
-    pose_1_key = this.keys()[1]
-    velocity_0_key = this.keys()[2]
-    velocity_1_key = this.keys()[3]
-    pose_0_estimate = values.atPose2(pose_0_key)
-    pose_0_estimate = np.array([pose_0_estimate.x(), pose_0_estimate.y(), pose_0_estimate.theta()])
-    pose_1_estimate = values.atPose2(pose_1_key)
-    pose_1_estimate = np.array([pose_1_estimate.x(), pose_1_estimate.y(), pose_1_estimate.theta()])
-    velocity_0_estimate = values.atVector(velocity_0_key)
-    velocity_1_estimate = values.atVector(velocity_1_key)
-
-    # Calculate the error
-    delta_estimate_global = np.concatenate((pose_1_estimate - pose_0_estimate,
-                                            velocity_1_estimate - velocity_0_estimate))
-    theta = pose_0_estimate.item(2)
-    R = np.array([[np.cos(theta), -np.sin(theta)],
-                  [np.sin(theta), np.cos(theta)]]).T
-    R_full = np.eye(5)
-    R_full[:2, :2] = R
-    R_full[3:, 3:] = R
-    delta_estimate_local = R_full @ delta_estimate_global
-    error = delta_estimate_local - odometry.flatten()
-
-    # Calculate the jacobians
-    if jacobians is not None:
-        dx = pose_1_estimate[0] - pose_0_estimate[0]
-        dy = pose_1_estimate[1] - pose_0_estimate[1]
-        dvx = velocity_1_estimate[0] - velocity_0_estimate[0]
-        dvy = velocity_1_estimate[1] - velocity_0_estimate[1]
-        jacobians[0] = np.array([[-np.cos(theta), -np.sin(theta), -np.sin(theta) * dx + np.cos(theta) * dy],
-                                 [np.sin(theta), -np.cos(theta), -np.cos(theta) * dx - np.sin(theta) * dy],
-                                 [0, 0, -1],
-                                 [0, 0, -np.sin(theta) * dvx + np.cos(theta) * dvy],
-                                 [0, 0, -np.cos(theta) * dvx - np.sin(theta) * dvy]])
-        jacobians[1] = np.array([[np.cos(theta), np.sin(theta), 0],
-                                 [-np.sin(theta), np.cos(theta), 0],
-                                 [0, 0, 1],
-                                 [0, 0, 0],
-                                 [0, 0, 0]])
-        jacobians[2] = np.array([[0, 0],
-                                 [0, 0],
-                                 [0, 0],
-                                 [-np.cos(theta), -np.sin(theta)],
-                                 [np.sin(theta), -np.cos(theta)]])
-        jacobians[3] = np.array([[0, 0],
-                                 [0, 0],
-                                 [0, 0],
-                                 [np.cos(theta), np.sin(theta)],
-                                 [-np.sin(theta), np.cos(theta)]])
-
-    return error
-
-
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
     from matplotlib.patches import Ellipse
 
     prior_noise = np.array([[0.1], [0.1], [0.1], [1e-6], [1e-6]])
-    odometry_covariance = np.diag([0.2, 0.2, 0.1, 1e-6, 1e-6])**2
     global_noise = np.array([[0.1], [0.1], [np.inf]])
     range_noise = 0.1
 
@@ -446,32 +302,16 @@ if __name__ == "__main__":
         Prior("A", np.array([[0], [0], [0], [1], [0]]), prior_noise),
         Prior("B", np.array([[0], [5], [np.pi / 4], [1], [1]]), prior_noise),
     ]
-    odometries_1 = [
-        Odometry("A", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
-        Odometry("A", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
-    ]
     range_measurements = [
         Range("A", "B", 6, range_noise),
-    ]
-    odometries_2 = [
-        Odometry("A", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
-        Odometry("A", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
-        Odometry("B", np.array([[2], [0], [0], [0], [0]]), odometry_covariance),
     ]
     globals = [
         Global("A", np.array([[8], [0], [0]]), global_noise),
     ]
 
     backend = Backend(priors)
-    for odometry in odometries_1:
-        backend.add_odometry(odometry)
     for range_meas in range_measurements:
         backend.add_range(range_meas)
-    for odometry in odometries_2:
-        backend.add_odometry(odometry)
     for global_measurement in globals:
         backend.add_global(global_measurement)
 

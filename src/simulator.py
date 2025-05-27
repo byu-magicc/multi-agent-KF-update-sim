@@ -1,7 +1,7 @@
 import numpy as np
 
-from backend import Backend, Prior, Odometry, Global, Range
-from measurements import get_pseudo_global_measurement, get_odometry_transform
+from backend import Backend, Prior, Global, Range
+from measurements import get_pseudo_global_measurement
 from vehicle import Vehicle, TrajectoryType
 
 
@@ -70,16 +70,6 @@ class Simulation:
         ]
         self.backend = Backend(priors)
 
-        # Storage for backend odometry edges
-        self.previous_vehicle_pose = [
-            np.zeros((5, 1)) for _ in range(len(self.vehicles))
-        ]
-        self.previous_vehicle_Sigma = [
-            np.zeros((5, 5)) for _ in range(len(self.vehicles))
-        ]
-        for i in range(len(self.vehicles)):
-            self._update_previous_pose(i)
-
     def run(self, num_steps_in_results=100, compute_backend=False):
         """
         Runs the entire simulation, from start to finish.
@@ -133,10 +123,6 @@ class Simulation:
                     # Apply simulated global measurement
                     #if vehicle.get_current_time() in self.GLOBAL_STEP:
                     #    if i == 0:
-                    #        # Get odometry edge for vehicle 0 and 1 and add them to the backend
-                    #        self._send_odometry_to_backend(0)
-                    #        self._send_odometry_to_backend(1)
-
                     #        # Generate measurement
                     #        global_meas = \
                     #            vehicle._truth_hist[:3, vehicle._current_step].reshape(-1, 1).copy()
@@ -160,10 +146,6 @@ class Simulation:
                     #                pre_Sigma, post_Sigma
                     #        )
                     #        self.vehicles[1].global_update(z, Sigma_z)
-
-                    #        # Store current ekf estimates
-                    #        self._update_previous_pose(0)
-                    #        self._update_previous_pose(1)
 
                     ## Apply simulated range measurements
                     #if vehicle.get_current_step() in self.RANGE_MEASUREMENTS[:, 0]:
@@ -218,8 +200,6 @@ class Simulation:
                         ekf_hist_Sigma[i].append(curr_ekf_Sigma)
 
                         if compute_backend:
-                            self._send_odometry_to_backend(i)
-                            self._update_previous_pose(i)
                             backend_mu, backend_Sigma = self.backend.get_vehicle_info(f"{i}")
                             backend_hist_mu[i].append(backend_mu)
                             backend_hist_Sigma[i].append(backend_Sigma)
@@ -239,31 +219,6 @@ class Simulation:
 
         return time_hist, truth_hist, ekf_hist_mu, ekf_hist_Sigma, \
             backend_hist_mu, backend_hist_Sigma
-
-    def _send_odometry_to_backend(self, vehicle_idx):
-        """
-        Create an odometry edge for a vehicle and send it to the backend.
-
-        Params:
-        vehicle_index: int
-            Index of vehicle to create odometry edge for.
-        """
-        T, Sigma_T = get_odometry_transform(self.previous_vehicle_pose[vehicle_idx],
-                                            self.vehicles[vehicle_idx]._ekf.mu,
-                                            self.previous_vehicle_Sigma[vehicle_idx],
-                                            self.vehicles[vehicle_idx]._ekf.Sigma)
-        self.backend.add_odometry(Odometry(f"{vehicle_idx}", T, Sigma_T))
-
-    def _update_previous_pose(self, vehicle_idx):
-        """
-        Update the previous pose of a vehicle, used for odometry edges.
-
-        Params:
-        vehicle_index: int
-            Index of vehicle to update previous pose for.
-        """
-        self.previous_vehicle_pose[vehicle_idx] = self.vehicles[vehicle_idx]._ekf.mu.copy()
-        self.previous_vehicle_Sigma[vehicle_idx] = self.vehicles[vehicle_idx]._ekf.Sigma.copy()
 
 
 if __name__ == "__main__":
