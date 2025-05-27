@@ -105,10 +105,6 @@ class Vehicle:
         self._ekf.global_update(z_t, sigma_z)
         return self._ekf.mu, self._ekf.Sigma
 
-    def shared_global_update(self, z_global, t_a_b, Sigma_global, Sigma_t):
-        self._ekf.shared_global_update(z_global, t_a_b, Sigma_global, Sigma_t)
-        return self._ekf.mu, self._ekf.Sigma
- 
     def range_update(self, z_t, Q, x_b, Sigma_b):
         self._ekf.range_update(z_t, Q, x_b, Sigma_b)
         return self._ekf.mu, self._ekf.Sigma

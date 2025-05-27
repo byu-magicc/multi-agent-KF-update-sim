@@ -254,40 +254,6 @@ class EKF:
         self.mu = self.mu + K_t @ (z_t - self.h_global(self.mu))
         self.Sigma = (np.eye(5) - K_t @ H_t) @ self.Sigma
 
-    def shared_global_update(self, z_global, t_a_b, Sigma_global, Sigma_t):
-        """
-        Apply a shared global measurement to the state estimate and covariance matrix.
-        Shared measurements are when a different agent (a) recieves a global measurement and translation
-        information from a multi-agent backend is used to apply that measurement to another vehicle
-        (b).
-
-        Parameters:
-        z_global: np.array, shape (3, 1)
-            Global measurement recieved at vehicle a. [[x, y, theta]].T
-        t_b_a: np.array, shape (3, 1)
-            Tranform information from vehicle a to b, in the frame of vehicle a.
-            [[delta_x, delta_y, delta_theta]].T
-        Sigma_global: np.array, shape (3, 3)
-            Covariance matrix of global measurement, in global frame.
-        Sigma_t: np.array, shape (3, 3)
-            Covariance matrix of translation information, in the frame of vehicle a.
-        """
-        assert z_global.shape == (3, 1)
-        assert t_a_b.shape == (3, 1)
-        assert Sigma_global.shape == (3, 3)
-        assert Sigma_t.shape == (3, 3)
-
-        z = z_global + t_a_b
-        J = np.hstack((np.eye(3), np.eye(3)))
-
-        # Calculate covariance of tranformed measurement
-        Sigma_temp = np.zeros((6, 6))
-        Sigma_temp[:3, :3] = Sigma_global
-        Sigma_temp[3:, 3:] = Sigma_t
-        Sigma_z = J @ Sigma_temp @ J.T
-
-        self.global_update(z, Sigma_z)
-
     def range_update(self, z_t, Sigma_z, x_b, Sigma_b):
         """
         Apply a range measurement recieved between two vehicles. Correlation between vehicles is
