@@ -61,15 +61,15 @@ class Vehicle:
                                          3)
 
         # Generate imu data
-        IMU_SIGMAS = np.array([1.0, 1.0, np.deg2rad(5)]).reshape(-1, 1)
+        self._IMU_SIGMAS = np.array([1.0, 1.0, np.deg2rad(5)]).reshape(-1, 1)
         v_0 = ((trajectory[:2, 1] - trajectory[:2, 0]) / self._DT).reshape(-1, 1)
-        self._imu_data, v_truth = get_imu_data(trajectory, IMU_SIGMAS, v_0, self._DT)
+        self._imu_data, v_truth = get_imu_data(trajectory, self._IMU_SIGMAS, v_0, self._DT)
 
         # Initialize EKF
         mu_0 = np.vstack((trajectory[:, 0].reshape(-1, 1).copy(), v_0)) \
             + np.random.normal(0, initial_sigmas)
         Sigma_0 = np.diag(initial_sigmas.flatten()**2)
-        self._ekf = EKF(mu_0, Sigma_0, IMU_SIGMAS, self._DT)
+        self._ekf = EKF(mu_0, Sigma_0, self._IMU_SIGMAS, self._DT)
 
         # Initialize history
         self._mu_hist = [mu_0]

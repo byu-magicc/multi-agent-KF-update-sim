@@ -1,6 +1,6 @@
 import numpy as np
 
-from backend import Backend, Prior, Global, Range
+from backend import Backend, Prior, Global, Range, IMU
 from measurements import get_pseudo_global_measurement
 from vehicle import Vehicle, TrajectoryType
 
@@ -68,7 +68,7 @@ class Simulation:
             Prior(f"{i}", self.vehicles[i]._ekf.mu, INITIAL_UNCERTAINTY_STD)
             for i in range(len(INITIAL_POSITIONS))
         ]
-        self.backend = Backend(priors)
+        self.backend = Backend(priors, self.vehicles[0]._IMU_SIGMAS, self.vehicles[0]._DT)
 
     def run(self, num_steps_in_results=100, compute_backend=False):
         """
@@ -117,7 +117,9 @@ class Simulation:
         while any(self.active_vehicles):
             for i, vehicle in enumerate(self.vehicles):
                 if self.active_vehicles[i]:
-                    # Propagate ekf
+                    # Apply IMU
+                    imu_meas = vehicle._imu_data[:, vehicle._current_step].reshape(-1, 1)
+                    self.backend.add_imu(IMU(f"{i}", imu_meas))
                     curr_ekf_mu, curr_ekf_Sigma = vehicle.step()
 
                     # Apply simulated global measurement
