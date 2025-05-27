@@ -317,12 +317,11 @@ def plot_trajectory_error(time_hist: np.ndarray,
                 axs[4, column_idx].plot(time_hist, backend_error_sigma[key][4, :], color='m')
 
             # NEES
-            axs[5, column_idx].axhline(5.0, color='g', linestyle='--')
+            axs[5, column_idx].axhline(5.0, color='k', linestyle='--')
             axs[5, column_idx].plot(time_hist, ekf_error_nees[key], color='g')
             axs[5, column_idx].set_xlabel('Time (s)')
             axs[5, column_idx].grid()
             if plot_backend:
-                axs[5, column_idx].axhline(3.0, color='m', linestyle='--')
                 axs[5, column_idx].plot(time_hist, backend_error_nees[key], color='m')
 
             # Add ylabels and legend
@@ -510,10 +509,10 @@ if __name__ == "__main__":
                                  np.array([[0, 0, 0, 0, 0], [-0.9, -0.9, -0.9, -0.9, -0.9]]).T]}
     ekf_Sigma_hist = {"Vehicle 1": [np.array([np.eye(5)*0.1, np.eye(5)*0.2]),
                                     np.array([np.eye(5)*0.1, np.eye(5)*0.2])]}
-    backend_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0], [0.85, 0.85, 0.85]]).T,
-                                     np.array([[0, 0, 0], [-0.85, -0.85, -0.85]]).T]}
-    backend_Sigma_hist = {"Vehicle 1": [np.array([np.eye(3)*0.08, np.eye(3)*0.16]),
-                                        np.array([np.eye(3)*0.08, np.eye(3)*0.16])]}
+    backend_mu_hist = {"Vehicle 1": [np.array([[0, 0, 0, 0, 0], [0.85, 0.85, 0.85, 0.85, 0.85]]).T,
+                                     np.array([[0, 0, 0, 0, 0], [-0.85, -0.85, -0.85, -0.85, -0.85]]).T]}
+    backend_Sigma_hist = {"Vehicle 1": [np.array([np.eye(5)*0.08, np.eye(5)*0.16]),
+                                        np.array([np.eye(5)*0.08, np.eye(5)*0.16])]}
 
     plot_trajectory_error(time_hist, truth_hist, ekf_mu_hist, ekf_Sigma_hist,
                           backend_mu_hist, backend_Sigma_hist)

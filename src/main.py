@@ -42,7 +42,7 @@ def main(num_instances: int, plot_fg_results: bool, trajectory_preset: int):
     # Extract data for plotting
     poses = []
     covariances = []
-    hist_indices = results[0][0]
+    time_hist = results[0][0]
     truth_hist = {}
     ekf_mu_hist = {}
     ekf_Sigma_hist = {}
@@ -95,11 +95,11 @@ def main(num_instances: int, plot_fg_results: bool, trajectory_preset: int):
 
     if num_instances <= large_iteration_cutoff:
         plot_overview(poses, covariances, num_sigma=num_sigma)
-        plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
+        plot_trajectory_error(time_hist, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                               backend_Sigma_hist, plot_backend=plot_fg_results)
     else:
         print(f'Only plotting sigma bounds since instances > {large_iteration_cutoff}')
-        plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
+        plot_trajectory_error(time_hist, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                               backend_Sigma_hist, plot_backend=plot_fg_results, sigma_only=True)
 
 
