@@ -222,6 +222,9 @@ class Backend:
         if global_measurement.vehicle not in self.vehicle_pose_ids:
             raise ValueError(f"Vehicle name {global_measurement.vehicle} not found in priors.")
 
+        # Create IMU edge for the vehicle if it doesn't exist
+        self._create_imu_edge(global_measurement.vehicle)
+
         # Add the global factor
         self.graph_outdated = True
         self.graph.add(
@@ -245,6 +248,10 @@ class Backend:
             raise ValueError(f"Vehicle name {range_measurement.vehicle1} not found in priors.")
         if range_measurement.vehicle2 not in self.vehicle_pose_ids:
             raise ValueError(f"Vehicle name {range_measurement.vehicle2} not found in priors.")
+
+        # Create IMU edges for the vehicles if they don't exist
+        self._create_imu_edge(range_measurement.vehicle1)
+        self._create_imu_edge(range_measurement.vehicle2)
 
         # Add the range factor
         self.graph_outdated = True
