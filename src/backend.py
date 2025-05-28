@@ -289,7 +289,6 @@ class Backend:
                       [np.sin(theta), np.cos(theta)]])
         R_full = np.eye(5)
         R_full[:2, :2] = R
-        R_full[3:, 3:] = R
         M = np.array([[0, 0, 0, 1, 0, 0, 0, 0, 0],
                       [0, 0, 0, 0, 1, 0, 0, 0, 0],
                       [0, 0, 1, 0, 0, 0, 0, 0, 0],
@@ -343,7 +342,6 @@ class Backend:
                           [np.sin(theta), np.cos(theta)]])
             R_full = np.eye(5)
             R_full[:2, :2] = R
-            R_full[3:, 3:] = R
             cov_2d = R_full @ M @ cov @ M.T @ R_full.T
 
             covariances.append(cov_2d)

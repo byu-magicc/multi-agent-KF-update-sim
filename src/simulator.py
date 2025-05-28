@@ -260,4 +260,4 @@ if __name__ == "__main__":
 
     plot_overview(poses, covariances)
     plot_trajectory_error(time_hist, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
-                          backend_Sigma_hist, plot_backend=False)
+                          backend_Sigma_hist, plot_backend=True)
