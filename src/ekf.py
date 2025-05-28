@@ -123,11 +123,11 @@ def _h_global(mu_t):
         [[x, y, theta, v_x, v_y]].T
 
     Returns:
-    np.array, shape (3, 1)
+    np.array, shape (5, 1)
         Predicted global pose.
     """
 
-    return mu_t[:3]
+    return mu_t
 
 
 def _H_global(mu_t):
@@ -140,11 +140,11 @@ def _H_global(mu_t):
         [[x, y, theta, v_x, v_y]].T
 
     Returns:
-    H_global_t: np.array, shape (3, 5)
+    H_global_t: np.array, shape (5, 5)
         Jacobian of the global measurement model.
     """
 
-    return np.eye(3, 5)
+    return np.eye(5)
 
 
 def _h_range(mu_a_t, mu_b_t):
@@ -240,13 +240,13 @@ class EKF:
         Apply a global measurement to the state estimate and covariance matrix.
 
         Parameters:
-        z_t: np.array, shape (3, 1)
-            Global measurement. [[x, y, theta]].T
-        Q: np.array, shape (3, 3)
+        z_t: np.array, shape (5, 1)
+            Global measurement. [[x, y, theta, vx, vy]].T
+        Q: np.array, shape (5, 5)
             Covariance matrix for the global measurement uncertainty.
         """
-        assert z_t.shape == (3, 1)
-        assert Q.shape == (3, 3)
+        assert z_t.shape == (5, 1)
+        assert Q.shape == (5, 5)
 
         H_t = self.H_global(self.mu)
 
@@ -306,7 +306,7 @@ if __name__ == "__main__":
 
     mu_0 = np.vstack([trajectory[:, 0].reshape(-1, 1).copy(), v_0])
     Sigma_0 = np.eye(5) * 1e-15
-    Sigma_global = np.diag([0.1, 0.1, 0.05])**2
+    Sigma_global = np.diag([0.1, 0.1, 0.05, 1e6, 1e6])**2
 
     mu_hist = {"Vehicle 1": [mu_0]}
     truth_hist = {"Vehicle 1": [np.vstack((trajectory, v_truth))]}
@@ -321,7 +321,9 @@ if __name__ == "__main__":
         Sigma_hist["Vehicle 1"].append(ekf.Sigma.copy())
 
         if i*dt % 50 == 0 and i != 0:
-            global_meas = trajectory[:3, i + 1].reshape(-1, 1)
+            pose = trajectory[:, i + 1]
+            vel = v_truth[:, i]
+            global_meas = np.concatenate((pose, vel)).reshape(-1, 1)
             ekf.global_update(global_meas, Sigma_global)
 
     mu_hist["Vehicle 1"] = [np.hstack(mu_hist["Vehicle 1"])]

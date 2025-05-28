@@ -81,13 +81,13 @@ class Global:
         """
         vehicle: str
             The name of the vehicle.
-        mean: np.ndarray (3, 1)
-            The mean of the global measurement. x, y, theta.
-        Sigmas: np.ndarray (3, 1)
+        mean: np.ndarray (5, 1)
+            The mean of the global measurement. x, y, theta, vx, vy.
+        Sigmas: np.ndarray (5, 1)
             The standard deviations of the global measurement.
         """
-        assert mean.shape == (3, 1)
-        assert Sigmas.shape == (3, 1)
+        assert mean.shape == (5, 1)
+        assert Sigmas.shape == (5, 1)
 
         self.vehicle = vehicle
         self.mean = mean
@@ -230,7 +230,8 @@ class Backend:
         self.graph.add(
             gtsam.CustomFactor(
                 gtsam.noiseModel.Diagonal.Sigmas(global_measurement.Sigmas.flatten()),
-                [self.vehicle_pose_ids[global_measurement.vehicle][-1]],
+                [self.vehicle_pose_ids[global_measurement.vehicle][-1],
+                 self.vehicle_velocity_ids[global_measurement.vehicle][-1]],
                 partial(_error_global, global_measurement.mean.flatten())
             )
         )
@@ -452,19 +453,28 @@ def _error_global(measurement: np.ndarray,
 
     Return: the unwhitened error
     """
-    key = this.keys()[0]
-    attitude = values.atPose3(key).rotation()
-    position = values.atPose3(key).translation()
+    pose_key = this.keys()[0]
+    velocity_key = this.keys()[1]
+    attitude = values.atPose3(pose_key).rotation()
+    position = values.atPose3(pose_key).translation()
+    velocity = values.atVector(velocity_key)
     theta = attitude.yaw()
     estimate = np.array([position.item(0),
                          position.item(1),
-                         theta])
+                         theta,
+                         velocity.item(0),
+                         velocity.item(1)])
     error = estimate - measurement
 
     if jacobians is not None:
-        jacobians[0] = np.array([[np.cos(theta), -np.sin(theta), 0],
-                                 [np.sin(theta), np.cos(theta), 0],
-                                 [0, 0, 1]]) @ M[:3]
+        R = np.array([[np.cos(theta), -np.sin(theta)],
+                      [np.sin(theta), np.cos(theta)]])
+        jac = np.eye(5)
+        jac[:2, :2] = R
+        jac = jac @ M
+
+        jacobians[0] = jac[:, :6]
+        jacobians[1] = jac[:, 6:]
 
     return error
 
@@ -483,7 +493,9 @@ if __name__ == "__main__":
     ]
     imu_a = IMU("A", np.array([[0.1], [-0.1], [-0.01]]))
     imu_b = IMU("B", np.array([[0.3], [-0.3], [0.01]]))
-    global_a = Global("A", np.array([[20], [-20], [-np.pi/4]]), np.array([[0.1], [0.1], [0.1]]))
+    global_a = Global("A",
+                      np.array([[20, -20, -np.pi/4, 0, 0]]).T,
+                      np.array([[1.0, 1.0, 1.0, 1e6, 1e6]]).T)
     range_ab = Range("A", "B", 65.0, 3)
 
     backend = Backend(priors, imu_noise, dt)

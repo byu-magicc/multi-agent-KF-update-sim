@@ -162,14 +162,14 @@ if __name__ == "__main__":
     final_position = np.array([[1000, 1000]]).T
     trajectory_type = TrajectoryType.SINE
     initial_sigmas = np.array([0.5, 0.5, 1e-2, 0.1, 0.1]).reshape(-1, 1)
-    global_sigmas = np.array([0.5, 0.5, 1e15]).reshape(-1, 1)
+    global_sigmas = np.array([0.5, 0.5, 1e9, 1e9, 1e9]).reshape(-1, 1)
 
     vehicle = Vehicle(initial_position, final_position, initial_sigmas, trajectory_type, 15)
 
     while vehicle.step() is not None:
         if vehicle.get_current_time() % 50 == 0 and vehicle.get_current_time() != 0:
-            global_meas = vehicle._truth_hist[:3, vehicle._current_step].reshape(-1, 1).copy()
-            global_meas += np.random.normal(0, global_sigmas)
+            global_meas = vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
+            global_meas[:2] += np.random.normal(0, global_sigmas[:2])
             vehicle.global_update(global_meas, np.diag(global_sigmas.flatten())**2)
 
     time_hist, truth_hist, mu_hist, Sigma_hist = vehicle.get_history()

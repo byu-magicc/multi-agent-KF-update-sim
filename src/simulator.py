@@ -1,7 +1,7 @@
 import numpy as np
 
 from backend import Backend, Prior, Global, Range, IMU
-from measurements import get_pseudo_global_measurement
+from measurements import get_pseudo_measurement
 from vehicle import Vehicle, TrajectoryType
 
 
@@ -53,8 +53,9 @@ class Simulation:
 
         # Measurement uncertainty
         INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5), 0.5, 0.5]).reshape(-1, 1)
-        self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, 1e9]).reshape(-1, 1)
+        self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, 1e9, 1e9, 1e9]).reshape(-1, 1)
         self.RANGE_MEASUREMENT_STD = 1.0
+        self.PSEUDO_MEAS_IDX = [0, 1, 2, 3, 4]  # State values to include in psuedo measurement
 
         # Create vehicles
         self.vehicles = [
@@ -127,7 +128,7 @@ class Simulation:
                         if i == 0:
                             # Generate measurement
                             global_meas = \
-                                vehicle._truth_hist[:3, vehicle._current_step].reshape(-1, 1).copy()
+                                vehicle._truth_hist[:, vehicle._current_step].reshape(-1, 1).copy()
                             global_meas[:2] += np.random.normal(0, self.GLOBAL_MEASUREMENT_STD[:2])
 
                             # Vehicle a
@@ -143,10 +144,24 @@ class Simulation:
                                                            self.GLOBAL_MEASUREMENT_STD))
                             post_mu, post_Sigma = self.backend.get_vehicle_info(f"{1}")
 
-                            z, Sigma_z = get_pseudo_global_measurement(
-                                pre_mu[:3], post_mu[:3],
-                                pre_Sigma[:3, :3], post_Sigma[:3, :3]
+                            z, Sigma_z = get_pseudo_measurement(
+                                pre_mu[self.PSEUDO_MEAS_IDX],
+                                post_mu[self.PSEUDO_MEAS_IDX],
+                                pre_Sigma[np.ix_(
+                                    self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                                )],
+                                post_Sigma[np.ix_(
+                                    self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                                )]
                             )
+                            z_temp = np.zeros((5, 1))
+                            z_temp[self.PSEUDO_MEAS_IDX] = z
+                            z = z_temp
+                            Sigma_temp = np.eye(5) * 1e9
+                            Sigma_temp[np.ix_(
+                                self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                            )] = Sigma_z
+                            Sigma_z = Sigma_temp
                             self.vehicles[1].global_update(z, Sigma_z)
 
                     # Apply simulated range measurements
@@ -180,15 +195,45 @@ class Simulation:
                             post_vehicle_1_mu, post_vehicle_1_Sigma = \
                                 self.backend.get_vehicle_info(f"{curr_meas[2]}")
 
-                            # Calculate and apply psuedo measurement
-                            z_0, Sigma_z_0 = get_pseudo_global_measurement(
-                                pre_vehicle_0_mu[:3], post_vehicle_0_mu[:3],
-                                pre_vehicle_0_Sigma[:3, :3], post_vehicle_0_Sigma[:3, :3]
+                            # Calculate and apply psuedo measurements
+                            z_0, Sigma_z_0 = get_pseudo_measurement(
+                                pre_vehicle_0_mu[self.PSEUDO_MEAS_IDX],
+                                post_vehicle_0_mu[self.PSEUDO_MEAS_IDX],
+                                pre_vehicle_0_Sigma[np.ix_(
+                                    self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                                )],
+                                post_vehicle_0_Sigma[np.ix_(
+                                    self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                                )]
                             )
-                            z_1, Sigma_z_1 = get_pseudo_global_measurement(
-                                pre_vehicle_1_mu[:3], post_vehicle_1_mu[:3],
-                                pre_vehicle_1_Sigma[:3, :3], post_vehicle_1_Sigma[:3, :3]
+                            z_temp = np.zeros((5, 1))
+                            z_temp[self.PSEUDO_MEAS_IDX] = z_0
+                            z_0 = z_temp
+                            Sigma_temp = np.eye(5) * 1e9
+                            Sigma_temp[np.ix_(
+                                self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                            )] = Sigma_z_0
+                            Sigma_z_0 = Sigma_temp
+
+                            z_1, Sigma_z_1 = get_pseudo_measurement(
+                                pre_vehicle_1_mu[self.PSEUDO_MEAS_IDX],
+                                post_vehicle_1_mu[self.PSEUDO_MEAS_IDX],
+                                pre_vehicle_1_Sigma[np.ix_(
+                                    self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                                )],
+                                post_vehicle_1_Sigma[np.ix_(
+                                    self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                                )]
                             )
+                            z_temp = np.zeros((5, 1))
+                            z_temp[self.PSEUDO_MEAS_IDX] = z_1
+                            z_1 = z_temp
+                            Sigma_temp = np.eye(5) * 1e9
+                            Sigma_temp[np.ix_(
+                                self.PSEUDO_MEAS_IDX, self.PSEUDO_MEAS_IDX
+                            )] = Sigma_z_1
+                            Sigma_z_1 = Sigma_temp
+
                             vehicle_0.global_update(z_0, Sigma_z_0)
                             vehicle_1.global_update(z_1, Sigma_z_1)
 
