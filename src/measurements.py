@@ -55,27 +55,29 @@ def get_imu_data(trajectory, noise_std, v_0, dt):
     return a_array, np.hstack(v_truth_array)
 
 
-def get_pseudo_global_measurement(mu_current, mu_desired, Sigma_current, Sigma_desired):
+def get_pseudo_measurement(mu_current, mu_desired, Sigma_current, Sigma_desired):
     """
-    Get pseudo global measurement. Pseudo global measurements are measurements intended to
-    force an estimator from one mean and covariance to another mean and covariance.
+    Get pseudo measurement. Pseudo measurements are measurements intended to force an estimator
+    from one mean and covariance to another mean and covariance. Can use measurement type, so long
+    as the jacobian relating the measurement to the state is the identity matrix.
 
     Parameters:
-    mu_current (np.array): 3x1 numpy array of current filter state. [[x, y, theta]].T
-    mu_desired (np.array): 3x1 numpy array of desired filter state. [[x, y, theta]].T
-    Sigma_current (np.array): 3x3 numpy array of current filter covariance.
-    Sigma_desired (np.array): 3x3 numpy array of desired filter covariance.
+    mu_current (np.array): nx1 numpy array of current filter state.
+    mu_desired (np.array): nx1 numpy array of desired filter state.
+    Sigma_current (np.array): nxn numpy array of current filter covariance.
+    Sigma_desired (np.array): nxn numpy array of desired filter covariance.
 
     Returns:
     z, Sigma_z: Pseudo global measurement and covariance.
     """
-    assert mu_current.shape == (3, 1)
-    assert mu_desired.shape == (3, 1)
-    assert Sigma_current.shape == (3, 3)
-    assert Sigma_desired.shape == (3, 3)
+    dim = mu_current.shape[0]
+    assert mu_current.shape == (dim, 1)
+    assert mu_desired.shape == (dim, 1)
+    assert Sigma_current.shape == (dim, dim)
+    assert Sigma_desired.shape == (dim, dim)
 
-    temp = np.linalg.inv(np.eye(3) - Sigma_desired @ np.linalg.inv(Sigma_current))
-    Sigma_z = (temp - np.eye(3)) @ Sigma_current
+    temp = np.linalg.inv(np.eye(dim) - Sigma_desired @ np.linalg.inv(Sigma_current))
+    Sigma_z = (temp - np.eye(dim)) @ Sigma_current
     z = temp @ (mu_desired - mu_current) + mu_current
 
     return z, Sigma_z

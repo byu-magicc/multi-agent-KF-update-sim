@@ -61,7 +61,7 @@ class Vehicle:
                                          3)
 
         # Generate imu data
-        self._IMU_SIGMAS = np.array([1.0, 1.0, np.deg2rad(5)]).reshape(-1, 1)
+        self._IMU_SIGMAS = np.array([0.9, 0.9, np.deg2rad(0.025)]).reshape(-1, 1)
         v_0 = ((trajectory[:2, 1] - trajectory[:2, 0]) / self._DT).reshape(-1, 1)
         self._imu_data, v_truth = get_imu_data(trajectory, self._IMU_SIGMAS, v_0, self._DT)
 

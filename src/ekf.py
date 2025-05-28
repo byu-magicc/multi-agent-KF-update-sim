@@ -184,7 +184,7 @@ def _H_range(mu_a_t, mu_b_t):
 
 class EKF:
     """
-    Basic EKF class for IMU propagation and global measurements.
+    Basic 2D EKF class.
     """
     def __init__(self, mu_0, Sigma_0, imu_sigmas, dt):
         """
