@@ -5,6 +5,14 @@ import gtsam
 import numpy as np
 
 
+# Array for converting from 3d state to 2d state
+M = np.array([[0, 0, 0, 1, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 1, 0, 0, 0, 0],
+              [0, 0, 1, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 1, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 1, 0]])
+
+
 class Prior:
     """
     Struct for storing priors.
@@ -202,7 +210,6 @@ class Backend:
         self.graph_outdated = True
         self.imu_dt = imu_dt
 
-    # TODO: Update to 3d
     def add_global(self, global_measurement: Global):
         """
         Add a global measurement to the graph for the specified vehicle.
@@ -225,7 +232,6 @@ class Backend:
             )
         )
 
-    # TODO: Update to 3d
     def add_range(self, range_measurement: Range):
         """
         Add a range measurement to the graph for the specified vehicles.
@@ -243,7 +249,7 @@ class Backend:
         # Add the range factor
         self.graph_outdated = True
         self.graph.add(
-            gtsam.RangeFactorPose2(
+            gtsam.RangeFactorPose3(
                 self.vehicle_pose_ids[range_measurement.vehicle1][-1],
                 self.vehicle_pose_ids[range_measurement.vehicle2][-1],
                 range_measurement.mean,
@@ -289,11 +295,6 @@ class Backend:
                       [np.sin(theta), np.cos(theta)]])
         R_full = np.eye(5)
         R_full[:2, :2] = R
-        M = np.array([[0, 0, 0, 1, 0, 0, 0, 0, 0],
-                      [0, 0, 0, 0, 1, 0, 0, 0, 0],
-                      [0, 0, 1, 0, 0, 0, 0, 0, 0],
-                      [0, 0, 0, 0, 0, 0, 1, 0, 0],
-                      [0, 0, 0, 0, 0, 0, 0, 1, 0]])
 
         cov_2d = R_full @ M @ covariance @ M.T @ R_full.T
 
@@ -329,11 +330,6 @@ class Backend:
         # Get the covariances in global frame
         marginals = gtsam.Marginals(self.graph, self.current_estimates)
         covariances = []
-        M = np.array([[0, 0, 0, 1, 0, 0, 0, 0, 0],
-                      [0, 0, 0, 0, 1, 0, 0, 0, 0],
-                      [0, 0, 1, 0, 0, 0, 0, 0, 0],
-                      [0, 0, 0, 0, 0, 0, 1, 0, 0],
-                      [0, 0, 0, 0, 0, 0, 0, 1, 0]])
         for i, j in zip(self.vehicle_pose_ids[vehicle], self.vehicle_velocity_ids[vehicle]):
             cov = marginals.jointMarginalCovariance([i, j]).fullMatrix()
 
@@ -450,15 +446,18 @@ def _error_global(measurement: np.ndarray,
     Return: the unwhitened error
     """
     key = this.keys()[0]
-    estimate = values.atPose2(key)
-    theta = estimate.theta()
-    estimate = np.array([estimate.x(), estimate.y(), estimate.theta()])
+    attitude = values.atPose3(key).rotation()
+    position = values.atPose3(key).translation()
+    theta = attitude.yaw()
+    estimate = np.array([position.item(0),
+                         position.item(1),
+                         theta])
     error = estimate - measurement
 
     if jacobians is not None:
         jacobians[0] = np.array([[np.cos(theta), -np.sin(theta), 0],
                                  [np.sin(theta), np.cos(theta), 0],
-                                 [0, 0, 1]])
+                                 [0, 0, 1]]) @ M[:3]
 
     return error
 
@@ -477,6 +476,8 @@ if __name__ == "__main__":
     ]
     imu_a = IMU("A", np.array([[0.1], [-0.1], [-0.01]]))
     imu_b = IMU("B", np.array([[0.3], [-0.3], [0.01]]))
+    global_a = Global("A", np.array([[20], [-20], [-np.pi/4]]), np.array([[0.1], [0.1], [0.1]]))
+    range_ab = Range("A", "B", 65.0, 3)
 
     backend = Backend(priors, imu_noise, dt)
 
@@ -491,6 +492,9 @@ if __name__ == "__main__":
         backend.add_imu(imu_b)
     backend._create_imu_edge("A")
     backend._create_imu_edge("B")
+
+    backend.add_global(global_a)
+    backend.add_range(range_ab)
 
     poses_1, covariances_1 = backend.get_full_trajectory("A")
     poses_2, covariances_2 = backend.get_full_trajectory("B")
