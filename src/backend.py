@@ -180,6 +180,7 @@ class Backend:
 
         # IMU pre-integration objects
         pim_params = gtsam.PreintegrationCombinedParams.MakeSharedU(1e-9)
+        imu_sigmas /= 10  # Why on earth is this necessary? GTSAM supposedly uses the same units...
         accel_Sigma = np.eye(3) * 1e-9
         accel_Sigma[0, 0] = imu_sigmas[0]**2
         accel_Sigma[1, 1] = imu_sigmas[1]**2
