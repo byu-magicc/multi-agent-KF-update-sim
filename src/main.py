@@ -23,7 +23,7 @@ def main(num_instances: int, plot_fg_results: bool, trajectory_preset: int):
     large_iteration_cutoff = 10
 
     # Run simulations in parallel on multiple cores
-    num_steps_in_results = 200
+    num_steps_in_results = 50 if plot_fg_results else 100
     with Pool(processes=min(num_instances, int(cpu_count() / 2))) as pool:
         results = []
         for result in tqdm(

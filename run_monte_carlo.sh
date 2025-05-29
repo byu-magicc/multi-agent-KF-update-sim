@@ -10,8 +10,12 @@ mkdir plots
 # Build podman container
 podman build . -t multi-agent-gtsam-sim
 
-# Run simulation
-podman run --name multi-agent-gtsam-sim_container --replace multi-agent-gtsam-sim --plot_fg_results -n 1000 -t 0
+for i in {0..5}; do
+    echo "Running simulation $i..."
 
-# Copy out plots
-podman cp  multi-agent-gtsam-sim_container:/plots "plots"
+    # Run simulation
+    podman run --name multi-agent-gtsam-sim_container --replace multi-agent-gtsam-sim --plot_fg_results -n 1000 -t $i
+
+    # Copy out plots
+    podman cp  multi-agent-gtsam-sim_container:/plots "plots/plots_$i"
+done
