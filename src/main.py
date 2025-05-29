@@ -5,7 +5,7 @@ from multiprocessing import Pool, cpu_count
 import numpy as np
 from tqdm import tqdm
 
-from plotters import plot_overview, plot_trajectory_error, Trajectory, Covariance, Markers, Lines
+from plotters import plot_overview, plot_trajectory_error, Trajectory, Covariance
 from simulator import Simulation
 
 
@@ -93,19 +93,8 @@ def main(num_instances: int, plot_fg_results: bool, trajectory_preset: int):
     if plot_fg_results:
         covariances[1].name = f"FG {num_sigma} Sigma"
 
-    markers = []
-    for marker in Simulation(0).GLOBAL_STEP:
-        pose = Simulation(0).vehicles[0]._truth_hist[:2, marker].reshape(-1, 1)
-        markers.append(Markers(pose, color="k"))
-    lines = []
-    for line in Simulation(0).RANGE_MEASUREMENTS:
-        pose_0 = Simulation(0).vehicles[line[1]]._truth_hist[:2, line[0]].reshape(-1, 1)
-        pose_1 = Simulation(0).vehicles[line[2]]._truth_hist[:2, line[0]].reshape(-1, 1)
-        endpoints = np.hstack((pose_0, pose_1))
-        lines.append(Lines(endpoints, color="k"))
-
     if num_instances <= large_iteration_cutoff:
-        plot_overview(poses, covariances, markers, lines, num_sigma=num_sigma)
+        plot_overview(poses, covariances, num_sigma=num_sigma)
         plot_trajectory_error(hist_indices, truth_hist, ekf_mu_hist, ekf_Sigma_hist, backend_mu_hist,
                               backend_Sigma_hist, plot_backend=plot_fg_results)
     else:
