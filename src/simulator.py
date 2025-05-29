@@ -49,6 +49,7 @@ class Simulation:
             [1000, 0, 1],
             [1250, 0, 1],
             [1500, 0, 1],
+            [1750, 0, 1],
         ], dtype=int)
 
         # Measurement uncertainty
