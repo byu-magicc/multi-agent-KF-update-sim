@@ -309,7 +309,7 @@ def plot_trajectory_error(time_hist: np.ndarray,
 
             column_idx += 1
 
-        plt.suptitle('Monte-Carlo Estimate Error, No Multi-agent Measurements In EKF')
+        plt.suptitle('Monte-Carlo Estimate Error, With Pseudo Measurements')
         plt.tight_layout()
 
         if matplotlib.get_backend() == 'agg':

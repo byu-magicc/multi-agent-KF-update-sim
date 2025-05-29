@@ -52,7 +52,7 @@ class Simulation:
         ], dtype=int)
 
         # Measurement uncertainty
-        INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(2)]).reshape(-1, 1)
+        INITIAL_UNCERTAINTY_STD = np.array([0.5, 0.5, np.deg2rad(5)]).reshape(-1, 1)
         self.GLOBAL_MEASUREMENT_STD = np.array([0.5, 0.5, 1e9]).reshape(-1, 1)
         self.RANGE_MEASUREMENT_STD = 1.0
 
@@ -140,17 +140,17 @@ class Simulation:
                             )
 
                             # Vehicle b
-                            #pre_mu, pre_Sigma = self.backend.get_vehicle_info(f"{1}")
+                            pre_mu, pre_Sigma = self.backend.get_vehicle_info(f"{1}")
                             self.backend.add_global(Global(f"{0}",
                                                            global_meas,
                                                            self.GLOBAL_MEASUREMENT_STD))
-                            #post_mu, post_Sigma = self.backend.get_vehicle_info(f"{1}")
+                            post_mu, post_Sigma = self.backend.get_vehicle_info(f"{1}")
 
-                            #z, Sigma_z = get_pseudo_global_measurement(
-                            #        pre_mu, post_mu,
-                            #        pre_Sigma, post_Sigma
-                            #)
-                            #self.vehicles[1].global_update(z, Sigma_z)
+                            z, Sigma_z = get_pseudo_global_measurement(
+                                    pre_mu, post_mu,
+                                    pre_Sigma, post_Sigma
+                            )
+                            self.vehicles[1].global_update(z, Sigma_z)
 
                     # Apply simulated range measurements
                     if vehicle.get_current_step() in self.RANGE_MEASUREMENTS[:, 0]:
@@ -170,30 +170,30 @@ class Simulation:
                             range_meas += np.random.normal(0, self.RANGE_MEASUREMENT_STD)
 
                             # Get pre and post estimates
-                            #pre_vehicle_0_mu, pre_vehicle_0_Sigma = \
-                            #    self.backend.get_vehicle_info(f"{curr_meas[1]}")
-                            #pre_vehicle_1_mu, pre_vehicle_1_Sigma = \
-                            #    self.backend.get_vehicle_info(f"{curr_meas[2]}")
+                            pre_vehicle_0_mu, pre_vehicle_0_Sigma = \
+                                self.backend.get_vehicle_info(f"{curr_meas[1]}")
+                            pre_vehicle_1_mu, pre_vehicle_1_Sigma = \
+                                self.backend.get_vehicle_info(f"{curr_meas[2]}")
                             self.backend.add_range(Range(f"{curr_meas[1]}",
                                                          f"{curr_meas[2]}",
                                                          range_meas,
                                                          self.RANGE_MEASUREMENT_STD))
-                            #post_vehicle_0_mu, post_vehicle_0_Sigma = \
-                            #    self.backend.get_vehicle_info(f"{curr_meas[1]}")
-                            #post_vehicle_1_mu, post_vehicle_1_Sigma = \
-                            #    self.backend.get_vehicle_info(f"{curr_meas[2]}")
+                            post_vehicle_0_mu, post_vehicle_0_Sigma = \
+                                self.backend.get_vehicle_info(f"{curr_meas[1]}")
+                            post_vehicle_1_mu, post_vehicle_1_Sigma = \
+                                self.backend.get_vehicle_info(f"{curr_meas[2]}")
 
                             # Calculate and apply psuedo measurement
-                            #z_0, Sigma_z_0 = get_pseudo_global_measurement(
-                            #    pre_vehicle_0_mu, post_vehicle_0_mu,
-                            #    pre_vehicle_0_Sigma, post_vehicle_0_Sigma
-                            #)
-                            #z_1, Sigma_z_1 = get_pseudo_global_measurement(
-                            #    pre_vehicle_1_mu, post_vehicle_1_mu,
-                            #    pre_vehicle_1_Sigma, post_vehicle_1_Sigma
-                            #)
-                            #vehicle_0.global_update(z_0, Sigma_z_0)
-                            #vehicle_1.global_update(z_1, Sigma_z_1)
+                            z_0, Sigma_z_0 = get_pseudo_global_measurement(
+                                pre_vehicle_0_mu, post_vehicle_0_mu,
+                                pre_vehicle_0_Sigma, post_vehicle_0_Sigma
+                            )
+                            z_1, Sigma_z_1 = get_pseudo_global_measurement(
+                                pre_vehicle_1_mu, post_vehicle_1_mu,
+                                pre_vehicle_1_Sigma, post_vehicle_1_Sigma
+                            )
+                            vehicle_0.global_update(z_0, Sigma_z_0)
+                            vehicle_1.global_update(z_1, Sigma_z_1)
 
 
                     # Get hist results
